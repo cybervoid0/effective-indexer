@@ -1,11 +1,11 @@
 {
-	"name": "@rootstock/indexer",
-	"version": "0.1.0",
+	"name": "effective-indexer",
+	"version": "0.2.0",
 	"author": {
 		"name": "Aleksandr Shenshin",
 		"email": "mail@cybervoid.my"
 	},
-	"description": "Lightweight smart contract event indexer for Rootstock (RSK) blockchain",
+	"description": "Lightweight EVM smart contract event indexer built with Effect",
 	"type": "module",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.js",
@@ -35,7 +35,7 @@
 		"lint": "biome lint --write .",
 		"check": "biome check --write .",
 		"test": "vitest run",
-		"test:integration": "RUN_RSK_INTEGRATION=true vitest run test/integration/rsk.integration.test.ts",
+		"test:integration": "RUN_EVM_INTEGRATION=true vitest run test/integration/evm.integration.test.ts",
 		"test:watch": "vitest",
 		"prepublishOnly": "npm run build"
 	},
@@ -46,13 +46,15 @@
 		"effect": "^3.19.16"
 	},
 	"keywords": [
-		"rootstock",
-		"rsk",
+		"evm",
+		"ethereum",
 		"blockchain",
 		"indexer",
 		"events",
 		"effect",
-		"typescript"
+		"typescript",
+		"rootstock",
+		"rsk"
 	],
 	"dependencies": {
 		"@effect/platform": "^0.94.4",

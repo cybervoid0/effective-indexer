@@ -40,7 +40,7 @@ interface EthGetLogsResult {
 
 const toHexQuantity = (value: bigint): Hex => `0x${value.toString(16)}` as Hex
 
-export class RpcProvider extends Context.Tag("@rootstock/indexer/RpcProvider")<
+export class RpcProvider extends Context.Tag("effective-indexer/RpcProvider")<
 	RpcProvider,
 	{
 		readonly getBlockNumber: Effect.Effect<bigint, RpcError>

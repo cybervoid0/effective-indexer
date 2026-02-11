@@ -45,7 +45,11 @@ describe("fetchLogs", () => {
 			contracts: [
 				{ name: "Test", address: "0x1", abi: ERC20_ABI, events: ["Transfer"] },
 			],
-			chunkSize: 100,
+			network: {
+				logs: {
+					chunkSize: 100,
+				},
+			},
 		})
 
 		const TestLayer = Layer.merge(MockRpcProvider, TestConfig)

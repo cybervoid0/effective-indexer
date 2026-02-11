@@ -28,7 +28,7 @@ const parseStoredEvent = (row: StoredEvent): ParsedEvent => ({
 	args: JSON.parse(row.args) as Record<string, unknown>,
 })
 
-export class QueryApi extends Context.Tag("@rootstock/indexer/QueryApi")<
+export class QueryApi extends Context.Tag("effective-indexer/QueryApi")<
 	QueryApi,
 	{
 		readonly getEvents: (

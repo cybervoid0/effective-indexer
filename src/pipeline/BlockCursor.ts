@@ -3,7 +3,7 @@ import { Config } from "../config.js"
 import type { RpcError } from "../errors.js"
 import { RpcProvider } from "../services/RpcProvider.js"
 
-export class BlockCursor extends Context.Tag("@rootstock/indexer/BlockCursor")<
+export class BlockCursor extends Context.Tag("effective-indexer/BlockCursor")<
 	BlockCursor,
 	{
 		readonly liveBlocks: Stream.Stream<bigint, RpcError>
@@ -21,7 +21,7 @@ export const BlockCursorLive = Layer.effect(
 
 		const pollOnce = Effect.gen(function* () {
 			const current = yield* rpc.getBlockNumber
-			const confirmations = BigInt(config.confirmations)
+			const confirmations = BigInt(config.network.polling.confirmations)
 			const confirmed = current - confirmations
 			const prev = yield* Ref.get(lastSeen)
 			const isInitialized = yield* Ref.get(initialized)
@@ -62,7 +62,7 @@ export const BlockCursorLive = Layer.effect(
 		const liveBlocks: Stream.Stream<bigint, RpcError> =
 			Stream.repeatEffectWithSchedule(
 				pollOnce,
-				Schedule.spaced(config.pollInterval),
+				Schedule.spaced(config.network.polling.intervalMs),
 			).pipe(Stream.flatMap(Stream.fromIterable))
 
 		return { liveBlocks }

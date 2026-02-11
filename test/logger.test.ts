@@ -1,7 +1,11 @@
 import { SqliteClient } from "@effect/sql-sqlite-node"
 import { Chunk, Effect, Layer, Logger, LogLevel, Stream } from "effect"
 import { describe, expect, it } from "vitest"
-import { ConfigLive, type IndexerConfig, resolveConfig } from "../src/config.js"
+import {
+	ConfigLive,
+	type IndexerConfig,
+	resolveConfig,
+} from "../src/config.js"
 import { RpcError } from "../src/errors.js"
 import { LoggerLive } from "../src/logger.js"
 import { fetchLogs } from "../src/pipeline/LogFetcher.js"
@@ -66,6 +70,39 @@ describe("Logger", () => {
 			expect(resolved.logLevel).toBe("debug")
 			expect(resolved.logFormat).toBe("json")
 			expect(resolved.enableTelemetry).toBe(false)
+		})
+
+		it("resolves network config defaults", () => {
+			const resolved = resolveConfig(minimalConfig)
+			expect(resolved.network.polling.intervalMs).toBe(12000)
+			expect(resolved.network.polling.confirmations).toBe(1)
+			expect(resolved.network.logs.chunkSize).toBe(5000)
+			expect(resolved.network.logs.maxRetries).toBe(5)
+			expect(resolved.network.logs.retry.baseDelayMs).toBe(1000)
+			expect(resolved.network.logs.retry.maxDelayMs).toBe(30000)
+			expect(resolved.network.reorg.depth).toBe(20)
+		})
+
+		it("resolves custom network config", () => {
+			const resolved = resolveConfig({
+				...minimalConfig,
+				network: {
+					polling: { intervalMs: 2000, confirmations: 32 },
+					logs: {
+						chunkSize: 2000,
+						maxRetries: 10,
+						retry: { baseDelayMs: 500, maxDelayMs: 60000 },
+					},
+					reorg: { depth: 128 },
+				},
+			})
+			expect(resolved.network.polling.intervalMs).toBe(2000)
+			expect(resolved.network.polling.confirmations).toBe(32)
+			expect(resolved.network.logs.chunkSize).toBe(2000)
+			expect(resolved.network.logs.maxRetries).toBe(10)
+			expect(resolved.network.logs.retry.baseDelayMs).toBe(500)
+			expect(resolved.network.logs.retry.maxDelayMs).toBe(60000)
+			expect(resolved.network.reorg.depth).toBe(128)
 		})
 	})
 
@@ -153,7 +190,7 @@ describe("Logger", () => {
 
 			const TestConfig = ConfigLive({
 				...minimalConfig,
-				reorgDepth: 10,
+				network: { reorg: { depth: 10 } },
 			})
 			const TestSqliteLayer = SqliteClient.layer({ filename: ":memory:" })
 			const TestStorageLayer = StorageLive.pipe(Layer.provide(TestSqliteLayer))
@@ -405,8 +442,9 @@ describe("Logger", () => {
 
 				const TestConfig = ConfigLive({
 					...minimalConfig,
-					chunkSize: 10000,
-					maxRetries: 3,
+					network: {
+						logs: { chunkSize: 10000, maxRetries: 3 },
+					},
 				})
 
 				const TestLayer = Layer.mergeAll(

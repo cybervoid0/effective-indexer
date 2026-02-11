@@ -5,7 +5,7 @@ import type { BlockInfo } from "../services/RpcProvider.js"
 import { Storage } from "../services/Storage.js"
 
 export class ReorgDetector extends Context.Tag(
-	"@rootstock/indexer/ReorgDetector",
+	"effective-indexer/ReorgDetector",
 )<
 	ReorgDetector,
 	{
@@ -23,7 +23,7 @@ export const ReorgDetectorLive = Layer.effect(
 	Effect.gen(function* () {
 		const storage = yield* Storage
 		const config = yield* Config
-		const reorgDepth = config.reorgDepth
+		const reorgDepth = config.network.reorg.depth
 
 		const blockHashBuffer = yield* Ref.make<Map<bigint, string>>(new Map())
 		const initialized = yield* Ref.make(false)

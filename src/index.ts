@@ -15,7 +15,17 @@ import { StorageLive } from "./services/Storage.js"
 export type {
 	ContractConfig,
 	IndexerConfig,
+	LogsConfig,
+	NetworkConfig,
+	PollingConfig,
+	ReorgConfig,
 	ResolvedConfig,
+	ResolvedLogsConfig,
+	ResolvedNetworkConfig,
+	ResolvedPollingConfig,
+	ResolvedReorgConfig,
+	ResolvedRetryConfig,
+	RetryConfig,
 } from "./config.js"
 export { Config, ConfigLive, resolveConfig } from "./config.js"
 export type {

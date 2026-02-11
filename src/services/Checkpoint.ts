@@ -6,7 +6,7 @@ import { Storage } from "./Storage.js"
 export { Checkpoint } from "./Storage.js"
 
 export class CheckpointManager extends Context.Tag(
-	"@rootstock/indexer/CheckpointManager",
+	"effective-indexer/CheckpointManager",
 )<
 	CheckpointManager,
 	{

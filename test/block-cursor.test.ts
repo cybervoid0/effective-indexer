@@ -30,8 +30,12 @@ describe("BlockCursor", () => {
 			contracts: [
 				{ name: "Test", address: "0x1", abi: ERC20_ABI, events: ["Transfer"] },
 			],
-			pollInterval: 1,
-			confirmations: 0,
+			network: {
+				polling: {
+					intervalMs: 1,
+					confirmations: 0,
+				},
+			},
 		})
 
 		const TestLayer = BlockCursorLive.pipe(

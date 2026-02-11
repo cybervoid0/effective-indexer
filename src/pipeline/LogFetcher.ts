@@ -1,4 +1,4 @@
-import { Effect, Ref, Schedule, Stream } from "effect"
+import { Duration, Effect, Ref, Schedule, Stream } from "effect"
 import type { Abi } from "viem"
 import { encodeEventTopics } from "viem"
 import { Config } from "../config.js"
@@ -36,7 +36,7 @@ export const fetchLogs = (params: {
 		Effect.gen(function* () {
 			const config = yield* Config
 			const rpc = yield* RpcProvider
-			const chunkSize = BigInt(config.chunkSize)
+			const chunkSize = BigInt(config.network.logs.chunkSize)
 
 			const chunks: Array<{ from: bigint; to: bigint }> = []
 			let cursor = params.fromBlock
@@ -56,6 +56,8 @@ export const fetchLogs = (params: {
 			return Stream.fromIterable(chunks).pipe(
 				Stream.mapEffect(chunk =>
 					Effect.gen(function* () {
+						const { baseDelayMs, maxDelayMs } = config.network.logs.retry
+						const maxRetries = config.network.logs.maxRetries
 						const attempt = yield* Ref.make(0)
 						return yield* rpc
 							.getLogs({
@@ -68,7 +70,8 @@ export const fetchLogs = (params: {
 								Effect.tapError(e =>
 									Effect.gen(function* () {
 										const n = yield* Ref.getAndUpdate(attempt, a => a + 1)
-										const delayMs = 2 ** n * 1000
+										const rawDelay = 2 ** n * baseDelayMs
+										const delayMs = Math.min(rawDelay, maxDelayMs)
 										yield* Effect.logDebug("RPC getLogs failed, retrying").pipe(
 											Effect.annotateLogs({
 												method: "eth_getLogs",
@@ -76,15 +79,20 @@ export const fetchLogs = (params: {
 												to: chunk.to.toString(),
 												reason: e.reason,
 												attempt: (n + 1).toString(),
-												maxRetries: config.maxRetries.toString(),
+												maxRetries: maxRetries.toString(),
 												delayMs: delayMs.toString(),
 											}),
 										)
 									}),
 								),
 								Effect.retry(
-									Schedule.exponential("1 second").pipe(
-										Schedule.compose(Schedule.recurs(config.maxRetries)),
+									Schedule.exponential(Duration.millis(baseDelayMs)).pipe(
+										Schedule.delayed(d =>
+											Duration.millis(
+												Math.min(Duration.toMillis(d), maxDelayMs),
+											),
+										),
+										Schedule.compose(Schedule.recurs(maxRetries)),
 									),
 								),
 								Effect.tap(logs =>

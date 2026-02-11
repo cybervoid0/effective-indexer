@@ -66,7 +66,7 @@ const wrapSqlError = (operation: string) => (e: SqlError) =>
 		cause: e,
 	})
 
-export class Storage extends Context.Tag("@rootstock/indexer/Storage")<
+export class Storage extends Context.Tag("effective-indexer/Storage")<
 	Storage,
 	{
 		readonly initialize: Effect.Effect<void, StorageError>

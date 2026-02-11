@@ -16,7 +16,7 @@ export interface DecodedEvent {
 }
 
 export class EventDecoder extends Context.Tag(
-	"@rootstock/indexer/EventDecoder",
+	"effective-indexer/EventDecoder",
 )<
 	EventDecoder,
 	{

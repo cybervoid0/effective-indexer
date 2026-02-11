@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`@rootstock/indexer` — a lightweight smart contract event indexer for Rootstock (RSK) blockchain, built with Effect and viem. Published as a dual ESM/CJS package.
+`effective-indexer` — a lightweight EVM smart contract event indexer built with Effect and viem. Works with any EVM-compatible chain. Published as a dual ESM/CJS package.
 
 ## Commands
 
@@ -16,7 +16,7 @@ npm run check          # Biome format + lint (auto-fix)
 npm test               # Run all unit tests (vitest)
 npx vitest run test/storage.test.ts   # Run a single test file
 npm run test:watch     # Vitest in watch mode
-RUN_RSK_INTEGRATION=true npm run test:integration  # Live RSK testnet test
+RUN_EVM_INTEGRATION=true npm run test:integration  # Live EVM integration test
 ```
 
 ## TypeScript Configuration
@@ -34,7 +34,7 @@ Biome handles formatting and linting. Key settings:
 
 ### Effect-based dependency injection
 
-Every service is a `Context.Tag` with a `Layer` implementation. Services are composed into an explicit dependency tree — not merged flat. The layer graph:
+Every service is a `Context.Tag` (namespaced `effective-indexer/*`) with a `Layer` implementation. Services are composed into an explicit dependency tree — not merged flat. The layer graph:
 
 ```
 Config + SqliteClient (foundation)
@@ -47,6 +47,15 @@ Config + SqliteClient (foundation)
 └→ EventDecoder (no deps — Layer.succeed)
 ```
 
+### Network config structure
+
+`IndexerConfig.network` is the primary config for chain-specific tuning:
+- `network.polling` — `intervalMs`, `confirmations`
+- `network.logs` — `chunkSize`, `maxRetries`, `retry.baseDelayMs`, `retry.maxDelayMs`
+- `network.reorg` — `depth`
+
+Old flat fields (`chunkSize`, `pollInterval`, `confirmations`, `maxRetries`, `reorgDepth`) are deprecated but still supported via backward-compatible mapping. `ResolvedConfig` keeps flat aliases computed from `network`.
+
 ### Pipeline flow (src/pipeline/)
 
 Two-phase indexing per contract:
@@ -58,13 +67,14 @@ Multiple contracts are indexed concurrently via `Stream.mergeAll`.
 ### Key source files
 
 - `src/index.ts` — public API: `createIndexer(config)` returns an `IndexerHandle` with `start()`, `stop()`, `query()`, `count()`
-- `src/config.ts` — `IndexerConfig` (user-facing) → `ResolvedConfig` (with defaults applied)
+- `src/config.ts` — `IndexerConfig` (user-facing) → `ResolvedConfig` (with defaults applied), `NetworkConfig` → `ResolvedNetworkConfig`
 - `src/errors.ts` — tagged error types: `RpcError`, `DecodeError`, `StorageError`, `ReorgDetected`, `CheckpointError`, `ConfigError`
 - `src/services/Storage.ts` — SQLite schema (events, checkpoints, block_hashes tables), batch insert with `INSERT OR IGNORE`
 - `src/services/RpcProvider.ts` — viem `PublicClient` wrapper
 - `src/services/EventDecoder.ts` — viem `decodeEventLog` with `strict: false`
 - `src/pipeline/Indexer.ts` — orchestrates backfill + live phases
 - `src/pipeline/ReorgDetector.ts` — parentHash chain verification, rollback on fork
+- `src/pipeline/LogFetcher.ts` — chunked `eth_getLogs` with exponential backoff (capped by `maxDelayMs`)
 - `src/query.ts` — query API for stored events (filter by contract, event, block range, tx hash)
 
 ### Testing patterns
@@ -74,6 +84,6 @@ Multiple contracts are indexed concurrently via `Stream.mergeAll`.
 - Effect pipelines tested via `Effect.runPromise(effect.pipe(Effect.provide(TestLayer)))`
 - RPC calls mocked with `vi.fn()` / `vi.mock()`
 
-### RSK-specific defaults
+### EVM defaults
 
-~30s block time → 15s poll interval. `eth_getLogs` chunked to 5000 blocks per request.
+Default `intervalMs: 12000` (Ethereum ~12s blocks). Override for other chains via `network.polling.intervalMs`. `eth_getLogs` chunked to 5000 blocks per request. Retry uses exponential backoff from 1s base, capped at 30s.

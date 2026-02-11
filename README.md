@@ -1,22 +1,24 @@
-# @rootstock/indexer
+# Effective Indexer
 
-Lightweight event indexer for Rootstock (RSK).
+Lightweight EVM smart contract event indexer built with [Effect](https://effect.website).
 
-It indexes smart contract events into SQLite with:
-- historical backfill (`eth_getLogs` in chunks)
-- live polling for new blocks
-- checkpoint resume after restart
-- basic reorg handling
+Indexes smart contract events into SQLite with:
+- Historical backfill (`eth_getLogs` in chunks)
+- Live polling for new blocks
+- Checkpoint resume after restart
+- Reorg detection and rollback
+
+Works with any EVM-compatible chain (Ethereum, Rootstock, Polygon, Arbitrum, etc.).
 
 ## Requirements
 
 - Node.js `>=20`
-- RPC endpoint with `eth_getLogs` enabled
+- RPC endpoint with `eth_getLogs` support
 
 ## Install
 
 ```bash
-npm install @rootstock/indexer effect
+npm install effective-indexer effect
 ```
 
 `effect` is a peer dependency.
@@ -24,7 +26,7 @@ npm install @rootstock/indexer effect
 ## Quick Start
 
 ```ts
-import { Indexer } from "@rootstock/indexer"
+import { Indexer } from "effective-indexer"
 import type { Abi } from "viem"
 
 const abi: Abi = [
@@ -40,25 +42,29 @@ const abi: Abi = [
 ]
 
 const indexer = Indexer.create({
-	rpcUrl: "https://rpc.mainnet.rootstock.io/<API_KEY>",
+	rpcUrl: "https://eth.llamarpc.com",
 	dbPath: "./data/events.db",
 	contracts: [
 		{
-			name: "Token",
-			address: "0x5Db91E24BD32059584bbdB831a901F1199f3D459",
+			name: "USDT",
+			address: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
 			abi,
 			events: ["Transfer"],
-			startBlock: 6704080n,
+			startBlock: 19000000n,
 		},
 	],
+	network: {
+		polling: { intervalMs: 12000, confirmations: 2 },
+		logs: { chunkSize: 2000 },
+		reorg: { depth: 64 },
+	},
 })
 
 await indexer.start() // non-blocking, runs in background
 
 const events = await indexer.query({
-	contractName: "Token",
+	contractName: "USDT",
 	eventName: "Transfer",
-	fromBlock: 6704080n,
 	limit: 50,
 	order: "desc",
 })
@@ -79,16 +85,50 @@ Returns `IndexerHandle`:
 - `query(q?: EventQuery): Promise<ParsedEvent[]>`
 - `count(q?: EventQuery): Promise<number>`
 
-### `IndexerConfig` (important fields)
+### `IndexerConfig`
 
-- `rpcUrl: string`
-- `dbPath?: string` (default `./indexer.db`)
-- `contracts: [{ name, address, abi, events, startBlock? }]`
-- `chunkSize?: number` (default `5000`)
-- `pollInterval?: number` (default `15000`)
-- `confirmations?: number` (default `0`)
-- `maxRetries?: number` (default `5`)
-- `reorgDepth?: number` (default `10`)
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `rpcUrl` | `string` | — | RPC endpoint URL |
+| `dbPath` | `string` | `"./indexer.db"` | SQLite database path |
+| `contracts` | `ContractConfig[]` | — | Contracts to index |
+| `network` | `NetworkConfig` | see below | Network tuning |
+| `logLevel` | `string` | `"info"` | Minimum log level |
+| `logFormat` | `string` | `"pretty"` | Log output format |
+| `enableTelemetry` | `boolean` | `true` | Set `false` for errors-only |
+
+### `NetworkConfig`
+
+```ts
+{
+  polling: {
+    intervalMs: 12000,     // block polling interval
+    confirmations: 1,       // blocks behind head to consider confirmed
+  },
+  logs: {
+    chunkSize: 5000,        // blocks per eth_getLogs request
+    maxRetries: 5,          // retry count on RPC failure
+    retry: {
+      baseDelayMs: 1000,    // initial retry delay
+      maxDelayMs: 30000,    // cap for exponential backoff
+    },
+  },
+  reorg: {
+    depth: 20,              // block hash buffer depth for reorg detection
+  },
+}
+```
+
+All fields are optional — defaults are shown above.
+
+### Network Tuning Profiles
+
+| Chain | `polling.intervalMs` | `polling.confirmations` | `logs.chunkSize` | `reorg.depth` |
+|-------|---------------------|------------------------|------------------|---------------|
+| Ethereum | 12000 | 2 | 2000 | 64 |
+| Rootstock | 30000 | 1 | 5000 | 20 |
+| Polygon | 2000 | 32 | 2000 | 128 |
+| Arbitrum | 1000 | 0 | 5000 | 1 |
 
 ### `EventQuery`
 
@@ -103,17 +143,7 @@ Returns `IndexerHandle`:
 
 ## Telemetry & Logging
 
-The indexer uses Effect's native logging system for structured telemetry. All log output is controlled via config — no `console.log` calls in source.
-
-### Config Options
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `logLevel` | `"trace" \| "debug" \| "info" \| "warning" \| "error" \| "none"` | `"info"` | Minimum log level |
-| `logFormat` | `"pretty" \| "json" \| "structured"` | `"pretty"` | Output format |
-| `enableTelemetry` | `boolean` | `true` | Set `false` to suppress all logs except errors |
-
-### Log Level Guide
+The indexer uses Effect's native logging system. All log output is controlled via config — no `console.log` calls in source.
 
 | Level | What's emitted |
 |-------|---------------|
@@ -122,23 +152,6 @@ The indexer uses Effect's native logging system for structured telemetry. All lo
 | `info` | Indexer start/stop, backfill start/complete, reorg handled |
 | `debug` | Chunk indexed, block indexed, storage init, query/count execution, reorg rollback, BlockCursor init |
 | `trace` | Individual log fetches, block emissions, no-new-blocks polls |
-
-### Example: Pretty Format (default)
-
-```
-timestamp=... level=INFO message="Indexer starting" contracts=2
-timestamp=... level=INFO message="Backfill starting" contract=Token fromBlock=6704080 toBlock=6710000
-timestamp=... level=DEBUG message="Chunk indexed" contract=Token events=42 checkpoint=6709080
-timestamp=... level=INFO message="Backfill complete, switching to live" contract=Token
-timestamp=... level=DEBUG message="Block indexed" contract=Token block=6710001 events=1
-```
-
-### Example: JSON Format
-
-```json
-{"timestamp":"...","level":"INFO","message":"Indexer starting","contracts":"2"}
-{"timestamp":"...","level":"WARNING","message":"Reorg detected","contract":"Token","forkBlock":"6710005"}
-```
 
 ### Recommendations
 
@@ -163,16 +176,10 @@ npm run test
 npm run check
 ```
 
-### Live Integration Tests (real RSK contracts)
+### Live Integration Tests
 
-Integration tests read RPC URLs from:
-- `.env` (mainnet)
-- `.env.test` (testnet)
-
-Run:
+Integration tests read RPC URLs from `.env` (mainnet) and `.env.test` (testnet) using `EVM_RPC_URL`.
 
 ```bash
 npm run test:integration
 ```
-
-This runs real-chain fetch + decode checks against known contracts.

@@ -19,8 +19,9 @@ interface IntegrationScenario {
 	readonly abi: typeof STRIF_TOKEN_ABI | typeof GOVERNOR_ABI
 }
 
-const readRpcUrlFromEnvFile = (
+const readEnvVar = (
 	fileName: ".env" | ".env.test",
+	key: string,
 ): string | null => {
 	try {
 		const filePath = join(process.cwd(), fileName)
@@ -28,17 +29,20 @@ const readRpcUrlFromEnvFile = (
 		const line = content
 			.split("\n")
 			.map(value => value.trim())
-			.find(value => value.startsWith("ROOTSTOCK_RPC_URL="))
+			.find(value => value.startsWith(`${key}=`))
 		if (!line) return null
-		const rawValue = line.replace("ROOTSTOCK_RPC_URL=", "").trim()
+		const rawValue = line.replace(`${key}=`, "").trim()
 		return rawValue.length > 0 ? rawValue : null
 	} catch {
 		return null
 	}
 }
 
-const mainnetRpcUrl = readRpcUrlFromEnvFile(".env")
-const testnetRpcUrl = readRpcUrlFromEnvFile(".env.test")
+const readRpcUrl = (fileName: ".env" | ".env.test"): string | null =>
+	readEnvVar(fileName, "EVM_RPC_URL")
+
+const mainnetRpcUrl = readRpcUrl(".env")
+const testnetRpcUrl = readRpcUrl(".env.test")
 
 const scenarios: readonly IntegrationScenario[] = [
 	{
@@ -81,7 +85,7 @@ const scenarios: readonly IntegrationScenario[] = [
 ]
 
 const runIntegration =
-	process.env.RUN_RSK_INTEGRATION === "true" &&
+	process.env.RUN_EVM_INTEGRATION === "true" &&
 	mainnetRpcUrl !== null &&
 	testnetRpcUrl !== null
 const describeIntegration = runIntegration ? describe : describe.skip
@@ -174,7 +178,7 @@ const findWindowWithLogs = (
 		)
 	})
 
-describeIntegration("RSK integration (real contracts)", () => {
+describeIntegration("EVM integration (real contracts)", () => {
 	for (const scenario of scenarios) {
 		it(`fetches and decodes logs for ${scenario.name}`, async () => {
 			const integrationLayer = createIntegrationLayer(scenario)

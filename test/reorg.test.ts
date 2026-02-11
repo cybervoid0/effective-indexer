@@ -19,7 +19,11 @@ const TestConfig = ConfigLive({
 	contracts: [
 		{ name: "Test", address: "0x1", abi: ERC20_ABI, events: ["Transfer"] },
 	],
-	reorgDepth: 10,
+	network: {
+		reorg: {
+			depth: 10,
+		},
+	},
 })
 
 const TestSqliteLayer = SqliteClient.layer({ filename: ":memory:" })
