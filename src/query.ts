@@ -54,23 +54,21 @@ export const QueryApiLive = Layer.effect(
 			)
 
 		const getEvents = (query?: EventQuery) =>
-			storage
-				.queryEvents(query ?? {})
-				.pipe(
-					Effect.map(rows => rows.map(parseStoredEvent)),
-					Effect.timed,
-					Effect.tap(([duration, results]) =>
-						Effect.logDebug("Query executed").pipe(
-							Effect.annotateLogs({
-								resultCount: results.length.toString(),
-								durationMs: Duration.toMillis(duration).toString(),
-								filters: serializeQuery(query),
-							}),
-						),
+			storage.queryEvents(query ?? {}).pipe(
+				Effect.map(rows => rows.map(parseStoredEvent)),
+				Effect.timed,
+				Effect.tap(([duration, results]) =>
+					Effect.logDebug("Query executed").pipe(
+						Effect.annotateLogs({
+							resultCount: results.length.toString(),
+							durationMs: Duration.toMillis(duration).toString(),
+							filters: serializeQuery(query),
+						}),
 					),
-					Effect.map(([, results]) => results),
-					Effect.withLogSpan("query"),
-				)
+				),
+				Effect.map(([, results]) => results),
+				Effect.withLogSpan("query"),
+			)
 
 		const getEventCount = (query?: EventQuery) =>
 			storage.countEvents(query).pipe(

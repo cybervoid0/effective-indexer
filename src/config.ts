@@ -39,13 +39,7 @@ export interface ResolvedConfig {
 	readonly confirmations: number
 	readonly maxRetries: number
 	readonly reorgDepth: number
-	readonly logLevel:
-		| "trace"
-		| "debug"
-		| "info"
-		| "warning"
-		| "error"
-		| "none"
+	readonly logLevel: "trace" | "debug" | "info" | "warning" | "error" | "none"
 	readonly logFormat: "pretty" | "json" | "structured"
 	readonly enableTelemetry: boolean
 }

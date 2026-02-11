@@ -18,7 +18,6 @@ export type {
 	ResolvedConfig,
 } from "./config.js"
 export { Config, ConfigLive, resolveConfig } from "./config.js"
-export { LoggerLive } from "./logger.js"
 export type {
 	CheckpointError,
 	ConfigError,
@@ -28,6 +27,7 @@ export type {
 	RpcError,
 	StorageError,
 } from "./errors.js"
+export { LoggerLive } from "./logger.js"
 export { BlockCursor, BlockCursorLive } from "./pipeline/BlockCursor.js"
 export { ReorgDetector, ReorgDetectorLive } from "./pipeline/ReorgDetector.js"
 export type { ParsedEvent } from "./query.js"

@@ -1,11 +1,7 @@
 import { SqliteClient } from "@effect/sql-sqlite-node"
 import { Chunk, Effect, Layer, Logger, LogLevel, Stream } from "effect"
 import { describe, expect, it } from "vitest"
-import {
-	ConfigLive,
-	type IndexerConfig,
-	resolveConfig,
-} from "../src/config.js"
+import { ConfigLive, type IndexerConfig, resolveConfig } from "../src/config.js"
 import { RpcError } from "../src/errors.js"
 import { LoggerLive } from "../src/logger.js"
 import { fetchLogs } from "../src/pipeline/LogFetcher.js"
@@ -160,9 +156,7 @@ describe("Logger", () => {
 				reorgDepth: 10,
 			})
 			const TestSqliteLayer = SqliteClient.layer({ filename: ":memory:" })
-			const TestStorageLayer = StorageLive.pipe(
-				Layer.provide(TestSqliteLayer),
-			)
+			const TestStorageLayer = StorageLive.pipe(Layer.provide(TestSqliteLayer))
 			const TestReorgLayer = ReorgDetectorLive.pipe(
 				Layer.provide(Layer.merge(TestStorageLayer, TestConfig)),
 			)
@@ -182,9 +176,7 @@ describe("Logger", () => {
 
 					// Build a normal chain: blocks 1-3
 					for (let i = 1; i <= 3; i++) {
-						yield* detector.verifyBlock(
-							makeBlock(BigInt(i), BigInt(i - 1)),
-						)
+						yield* detector.verifyBlock(makeBlock(BigInt(i), BigInt(i - 1)))
 					}
 
 					// A forked block 3 arrives with wrong parentHash
@@ -194,8 +186,7 @@ describe("Logger", () => {
 			)
 
 			const reorgWarnings = logs.filter(
-				l =>
-					l.message === "Parent hash mismatch" && l.level === "Warning",
+				l => l.message === "Parent hash mismatch" && l.level === "Warning",
 			)
 			expect(reorgWarnings).toHaveLength(1)
 			expect(reorgWarnings[0]!.annotations).toHaveProperty("block")
@@ -209,9 +200,7 @@ describe("Logger", () => {
 			const { logs, logger } = makeCaptureLogger()
 			const CaptureLayer = Logger.replace(Logger.defaultLogger, logger)
 			const TestSqliteLayer = SqliteClient.layer({ filename: ":memory:" })
-			const TestStorageLayer = StorageLive.pipe(
-				Layer.provide(TestSqliteLayer),
-			)
+			const TestStorageLayer = StorageLive.pipe(Layer.provide(TestSqliteLayer))
 			const TestLayer = Layer.mergeAll(
 				TestStorageLayer,
 				CaptureLayer,
@@ -264,12 +253,8 @@ describe("Logger", () => {
 		it("getEvents logs durationMs and filters", async () => {
 			const { logs, logger } = makeCaptureLogger()
 			const TestSqliteLayer = SqliteClient.layer({ filename: ":memory:" })
-			const TestStorageLayer = StorageLive.pipe(
-				Layer.provide(TestSqliteLayer),
-			)
-			const TestQueryLayer = QueryApiLive.pipe(
-				Layer.provide(TestStorageLayer),
-			)
+			const TestStorageLayer = StorageLive.pipe(Layer.provide(TestSqliteLayer))
+			const TestQueryLayer = QueryApiLive.pipe(Layer.provide(TestStorageLayer))
 			const TestLayer = Layer.mergeAll(
 				TestStorageLayer,
 				TestQueryLayer,
@@ -302,9 +287,7 @@ describe("Logger", () => {
 				}).pipe(Effect.provide(TestLayer)),
 			)
 
-			const queryLogs = logs.filter(
-				l => l.message === "Query executed",
-			)
+			const queryLogs = logs.filter(l => l.message === "Query executed")
 			expect(queryLogs).toHaveLength(1)
 			const ann = queryLogs[0]!.annotations
 			expect(ann).toHaveProperty("resultCount", "1")
@@ -323,12 +306,8 @@ describe("Logger", () => {
 		it("getEventCount logs durationMs and filters", async () => {
 			const { logs, logger } = makeCaptureLogger()
 			const TestSqliteLayer = SqliteClient.layer({ filename: ":memory:" })
-			const TestStorageLayer = StorageLive.pipe(
-				Layer.provide(TestSqliteLayer),
-			)
-			const TestQueryLayer = QueryApiLive.pipe(
-				Layer.provide(TestStorageLayer),
-			)
+			const TestStorageLayer = StorageLive.pipe(Layer.provide(TestSqliteLayer))
+			const TestQueryLayer = QueryApiLive.pipe(Layer.provide(TestStorageLayer))
 			const TestLayer = Layer.mergeAll(
 				TestStorageLayer,
 				TestQueryLayer,
@@ -349,9 +328,7 @@ describe("Logger", () => {
 				}).pipe(Effect.provide(TestLayer)),
 			)
 
-			const countLogs = logs.filter(
-				l => l.message === "Count executed",
-			)
+			const countLogs = logs.filter(l => l.message === "Count executed")
 			expect(countLogs).toHaveLength(1)
 			const ann = countLogs[0]!.annotations
 			expect(ann).toHaveProperty("count", "0")
@@ -369,12 +346,8 @@ describe("Logger", () => {
 		it("getEvents logs empty filters for undefined query", async () => {
 			const { logs, logger } = makeCaptureLogger()
 			const TestSqliteLayer = SqliteClient.layer({ filename: ":memory:" })
-			const TestStorageLayer = StorageLive.pipe(
-				Layer.provide(TestSqliteLayer),
-			)
-			const TestQueryLayer = QueryApiLive.pipe(
-				Layer.provide(TestStorageLayer),
-			)
+			const TestStorageLayer = StorageLive.pipe(Layer.provide(TestSqliteLayer))
+			const TestQueryLayer = QueryApiLive.pipe(Layer.provide(TestStorageLayer))
 			const TestLayer = Layer.mergeAll(
 				TestStorageLayer,
 				TestQueryLayer,
@@ -392,16 +365,17 @@ describe("Logger", () => {
 				}).pipe(Effect.provide(TestLayer)),
 			)
 
-			const queryLogs = logs.filter(
-				l => l.message === "Query executed",
-			)
+			const queryLogs = logs.filter(l => l.message === "Query executed")
 			expect(queryLogs).toHaveLength(1)
 			expect(queryLogs[0]!.annotations.filters).toBe("{}")
 		})
 	})
 
 	describe("retry telemetry fields", () => {
-		it("logs method, attempt, maxRetries, delayMs on retry", { timeout: 10000 }, async () => {
+		it(
+			"logs method, attempt, maxRetries, delayMs on retry",
+			{ timeout: 10000 },
+			async () => {
 				const { logs, logger } = makeCaptureLogger()
 				let callCount = 0
 
@@ -467,6 +441,7 @@ describe("Logger", () => {
 				expect(ann).toHaveProperty("from", "0")
 				expect(ann).toHaveProperty("to", "100")
 				expect(ann).toHaveProperty("reason", "timeout")
-			})
+			},
+		)
 	})
 })

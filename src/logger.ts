@@ -1,9 +1,7 @@
 import { Layer, Logger, LogLevel } from "effect"
 import type { ResolvedConfig } from "./config.js"
 
-const parseLogLevel = (
-	level: string,
-): LogLevel.LogLevel => {
+const parseLogLevel = (level: string): LogLevel.LogLevel => {
 	switch (level) {
 		case "trace":
 			return LogLevel.Trace

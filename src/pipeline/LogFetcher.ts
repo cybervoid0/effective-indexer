@@ -67,14 +67,9 @@ export const fetchLogs = (params: {
 							.pipe(
 								Effect.tapError(e =>
 									Effect.gen(function* () {
-										const n = yield* Ref.getAndUpdate(
-											attempt,
-											a => a + 1,
-										)
-										const delayMs = Math.pow(2, n) * 1000
-										yield* Effect.logDebug(
-											"RPC getLogs failed, retrying",
-										).pipe(
+										const n = yield* Ref.getAndUpdate(attempt, a => a + 1)
+										const delayMs = 2 ** n * 1000
+										yield* Effect.logDebug("RPC getLogs failed, retrying").pipe(
 											Effect.annotateLogs({
 												method: "eth_getLogs",
 												from: chunk.from.toString(),
@@ -89,9 +84,7 @@ export const fetchLogs = (params: {
 								),
 								Effect.retry(
 									Schedule.exponential("1 second").pipe(
-										Schedule.compose(
-											Schedule.recurs(config.maxRetries),
-										),
+										Schedule.compose(Schedule.recurs(config.maxRetries)),
 									),
 								),
 								Effect.tap(logs =>
