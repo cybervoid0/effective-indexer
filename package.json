@@ -1,6 +1,10 @@
 {
 	"name": "@rootstock/indexer",
 	"version": "0.1.0",
+	"author": {
+		"name": "Aleksandr Shenshin",
+		"email": "mail@cybervoid.my"
+	},
 	"description": "Lightweight smart contract event indexer for Rootstock (RSK) blockchain",
 	"type": "module",
 	"main": "./dist/index.cjs",
