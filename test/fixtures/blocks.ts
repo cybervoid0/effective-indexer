@@ -1,7 +1,7 @@
-import type { BlockInfo } from "../../src/services/RpcProvider.js";
+import type { BlockInfo } from "../../src/services/RpcProvider.js"
 
 export const makeBlockHash = (n: number): string =>
-	`0x${n.toString(16).padStart(64, "0")}`;
+	`0x${n.toString(16).padStart(64, "0")}`
 
 export const makeBlock = (
 	number: bigint,
@@ -11,15 +11,15 @@ export const makeBlock = (
 	hash: makeBlockHash(Number(number)),
 	parentHash: makeBlockHash(Number(parentNumber ?? number - 1n)),
 	timestamp: 1700000000n + number * 30n,
-});
+})
 
 export const makeChain = (from: number, to: number): BlockInfo[] => {
-	const blocks: BlockInfo[] = [];
+	const blocks: BlockInfo[] = []
 	for (let i = from; i <= to; i++) {
-		blocks.push(makeBlock(BigInt(i)));
+		blocks.push(makeBlock(BigInt(i)))
 	}
-	return blocks;
-};
+	return blocks
+}
 
 // A forked block that has a different hash but claims same parent
 export const makeForkedBlock = (number: bigint): BlockInfo => ({
@@ -29,4 +29,4 @@ export const makeForkedBlock = (number: bigint): BlockInfo => ({
 		.toString(16)
 		.padStart(61, "0")}`,
 	timestamp: 1700000000n + number * 30n,
-});
+})

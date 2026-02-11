@@ -1,4 +1,4 @@
-import type { Abi } from "viem";
+import type { Abi } from "viem"
 
 export const ERC20_ABI: Abi = [
 	{
@@ -19,7 +19,7 @@ export const ERC20_ABI: Abi = [
 			{ indexed: false, name: "value", type: "uint256" },
 		],
 	},
-];
+]
 
 export const STRIF_TOKEN_ABI: Abi = [
 	...ERC20_ABI,
@@ -32,7 +32,7 @@ export const STRIF_TOKEN_ABI: Abi = [
 			{ indexed: true, name: "toDelegate", type: "address" },
 		],
 	},
-];
+]
 
 export const GOVERNOR_ABI: Abi = [
 	{
@@ -91,4 +91,4 @@ export const GOVERNOR_ABI: Abi = [
 			{ indexed: false, name: "params", type: "bytes" },
 		],
 	},
-];
+]
