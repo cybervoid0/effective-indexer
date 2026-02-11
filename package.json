@@ -6,6 +6,7 @@
 		"email": "mail@cybervoid.my"
 	},
 	"description": "Lightweight EVM smart contract event indexer built with Effect",
+	"license": "MIT",
 	"type": "module",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.js",
