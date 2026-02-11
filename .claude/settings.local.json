@@ -1,0 +1,17 @@
+{
+	"permissions": {
+		"allow": [
+			"Bash(claude:*)",
+			"WebFetch(domain:effect.website)",
+			"WebFetch(domain:www.npmjs.com)",
+			"WebFetch(domain:deepwiki.com)",
+			"Bash(npm install:*)",
+			"Bash(node -e:*)",
+			"Bash(npm uninstall:*)",
+			"Bash(npx tsc:*)",
+			"Bash(node:*)",
+			"Bash(npx tsup:*)",
+			"Bash(npx vitest:*)"
+		]
+	}
+}
