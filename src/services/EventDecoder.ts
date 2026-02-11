@@ -15,9 +15,7 @@ export interface DecodedEvent {
 	readonly args: Record<string, unknown>
 }
 
-export class EventDecoder extends Context.Tag(
-	"effective-indexer/EventDecoder",
-)<
+export class EventDecoder extends Context.Tag("effective-indexer/EventDecoder")<
 	EventDecoder,
 	{
 		readonly decode: (

@@ -1,11 +1,7 @@
 import { SqliteClient } from "@effect/sql-sqlite-node"
 import { Chunk, Effect, Layer, Logger, LogLevel, Stream } from "effect"
 import { describe, expect, it } from "vitest"
-import {
-	ConfigLive,
-	type IndexerConfig,
-	resolveConfig,
-} from "../src/config.js"
+import { ConfigLive, type IndexerConfig, resolveConfig } from "../src/config.js"
 import { RpcError } from "../src/errors.js"
 import { LoggerLive } from "../src/logger.js"
 import { fetchLogs } from "../src/pipeline/LogFetcher.js"

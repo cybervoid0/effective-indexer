@@ -1,20 +1,20 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(claude:*)",
-      "WebFetch(domain:effect.website)",
-      "WebFetch(domain:www.npmjs.com)",
-      "WebFetch(domain:deepwiki.com)",
-      "Bash(npm install:*)",
-      "Bash(node -e:*)",
-      "Bash(npm uninstall:*)",
-      "Bash(npx tsc:*)",
-      "Bash(node:*)",
-      "Bash(npx tsup:*)",
-      "Bash(npx vitest:*)",
-      "Bash(npm run typecheck:*)",
-      "Bash(npm test:*)",
-      "Bash(npm run build:*)"
-    ]
-  }
+	"permissions": {
+		"allow": [
+			"Bash(claude:*)",
+			"WebFetch(domain:effect.website)",
+			"WebFetch(domain:www.npmjs.com)",
+			"WebFetch(domain:deepwiki.com)",
+			"Bash(npm install:*)",
+			"Bash(node -e:*)",
+			"Bash(npm uninstall:*)",
+			"Bash(npx tsc:*)",
+			"Bash(node:*)",
+			"Bash(npx tsup:*)",
+			"Bash(npx vitest:*)",
+			"Bash(npm run typecheck:*)",
+			"Bash(npm test:*)",
+			"Bash(npm run build:*)"
+		]
+	}
 }
