@@ -36,6 +36,13 @@ const indexContract = (
 			)
 			const currentHead = yield* rpc.getBlockNumber
 
+			yield* Effect.log("Backfill starting").pipe(
+				Effect.annotateLogs({
+					fromBlock: startBlock.toString(),
+					toBlock: currentHead.toString(),
+				}),
+			)
+
 			const topics = buildTopicFilter(contract.abi, contract.events)
 
 			// --- Phase 1: Historical Backfill ---
@@ -102,8 +109,17 @@ const indexContract = (
 										)
 									}
 
+									yield* Effect.logDebug("Chunk indexed").pipe(
+										Effect.annotateLogs({
+											events: withTimestamp.length.toString(),
+											checkpoint: lastBlock
+												? lastBlock.blockNumber.toString()
+												: "none",
+										}),
+									)
+
 									return withTimestamp
-								}),
+								}).pipe(Effect.withLogSpan("backfill_chunk")),
 							),
 							Stream.flatMap(Stream.fromIterable),
 						)
@@ -123,6 +139,14 @@ const indexContract = (
 							if (reorgResult._tag === "Left") {
 								const err = reorgResult.left
 								if (err._tag === "ReorgDetected") {
+									yield* Effect.logWarning("Reorg detected").pipe(
+										Effect.annotateLogs({
+											forkBlock: err.forkBlock.toString(),
+											expectedHash: err.expectedHash,
+											actualParentHash: err.actualParentHash,
+										}),
+									)
+
 									yield* reorgDetector.handleReorg(err.forkBlock)
 									const rewindBlock =
 										err.forkBlock > 0n ? err.forkBlock - 1n : 0n
@@ -130,6 +154,12 @@ const indexContract = (
 										(yield* storage.getBlockHash(rewindBlock)) ??
 										blockInfo.parentHash
 									yield* checkpoint.save(contract.name, rewindBlock, rewindHash)
+
+									yield* Effect.log("Reorg handled").pipe(
+										Effect.annotateLogs({
+											rewindTo: rewindBlock.toString(),
+										}),
+									)
 									// Skip this block. Next polls re-index from rewritten checkpoint.
 									return [] as DecodedEvent[]
 								}
@@ -168,14 +198,27 @@ const indexContract = (
 
 							yield* checkpoint.save(contract.name, blockNumber, blockInfo.hash)
 
+							yield* Effect.logDebug("Block indexed").pipe(
+								Effect.annotateLogs({
+									block: blockNumber.toString(),
+									events: withTimestamp.length.toString(),
+								}),
+							)
+
 							return withTimestamp
-						}),
+						}).pipe(Effect.withLogSpan("live_block")),
 					),
 					Stream.flatMap(Stream.fromIterable),
 				)
 
-			return Stream.concat(backfillStream, liveStream)
-		}),
+			return Stream.concat(
+				backfillStream,
+				Stream.concat(
+					Stream.execute(Effect.log("Backfill complete, switching to live")),
+					liveStream,
+				),
+			)
+		}).pipe(Effect.annotateLogs("contract", contract.name)),
 	)
 
 export const runIndexer: Effect.Effect<void, IndexerError, IndexerDeps> =
@@ -183,11 +226,29 @@ export const runIndexer: Effect.Effect<void, IndexerError, IndexerDeps> =
 		const config = yield* Config
 		const storage = yield* Storage
 
-		yield* storage.initialize
+		yield* storage.initialize.pipe(Effect.withLogSpan("storage_init"))
+
+		yield* Effect.log("Indexer starting").pipe(
+			Effect.annotateLogs({
+				contracts: config.contracts.length.toString(),
+			}),
+		)
 
 		const streams = config.contracts.map(c => indexContract(c))
 
 		yield* Stream.mergeAll(streams, { concurrency: streams.length }).pipe(
 			Stream.runDrain,
+			Effect.tapError(err =>
+				Effect.logError("Indexer error").pipe(
+					Effect.annotateLogs({
+						errorTag: err._tag,
+						reason: "reason" in err ? err.reason : String(err),
+						...("method" in err ? { method: err.method } : {}),
+						...("operation" in err ? { operation: err.operation } : {}),
+					}),
+				),
+			),
 		)
+
+		yield* Effect.log("Indexer stopped")
 	})

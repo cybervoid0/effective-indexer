@@ -30,10 +30,16 @@ export const BlockCursorLive = Layer.effect(
 			if (!isInitialized) {
 				yield* Ref.set(initialized, true)
 				yield* Ref.set(lastSeen, confirmed)
+				yield* Effect.logDebug("BlockCursor initialized").pipe(
+					Effect.annotateLogs({
+						confirmedHead: confirmed.toString(),
+					}),
+				)
 				return [] as ReadonlyArray<bigint>
 			}
 
 			if (confirmed <= prev) {
+				yield* Effect.logTrace("No new confirmed blocks")
 				return [] as ReadonlyArray<bigint>
 			}
 
@@ -43,6 +49,13 @@ export const BlockCursorLive = Layer.effect(
 			}
 
 			yield* Ref.set(lastSeen, confirmed)
+			yield* Effect.logTrace("Blocks emitted").pipe(
+				Effect.annotateLogs({
+					from: (prev + 1n).toString(),
+					to: confirmed.toString(),
+					count: blocks.length.toString(),
+				}),
+			)
 			return blocks as ReadonlyArray<bigint>
 		})
 

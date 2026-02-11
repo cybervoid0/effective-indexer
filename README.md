@@ -101,6 +101,52 @@ Returns `IndexerHandle`:
 - `offset?: number`
 - `order?: "asc" | "desc"`
 
+## Telemetry & Logging
+
+The indexer uses Effect's native logging system for structured telemetry. All log output is controlled via config — no `console.log` calls in source.
+
+### Config Options
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `logLevel` | `"trace" \| "debug" \| "info" \| "warning" \| "error" \| "none"` | `"info"` | Minimum log level |
+| `logFormat` | `"pretty" \| "json" \| "structured"` | `"pretty"` | Output format |
+| `enableTelemetry` | `boolean` | `true` | Set `false` to suppress all logs except errors |
+
+### Log Level Guide
+
+| Level | What's emitted |
+|-------|---------------|
+| `error` | Indexer errors (RPC failures, storage errors) |
+| `warning` | Reorg detection, parent hash mismatches |
+| `info` | Indexer start/stop, backfill start/complete, reorg handled |
+| `debug` | Chunk indexed, block indexed, storage init, query/count execution, reorg rollback, BlockCursor init |
+| `trace` | Individual log fetches, block emissions, no-new-blocks polls |
+
+### Example: Pretty Format (default)
+
+```
+timestamp=... level=INFO message="Indexer starting" contracts=2
+timestamp=... level=INFO message="Backfill starting" contract=Token fromBlock=6704080 toBlock=6710000
+timestamp=... level=DEBUG message="Chunk indexed" contract=Token events=42 checkpoint=6709080
+timestamp=... level=INFO message="Backfill complete, switching to live" contract=Token
+timestamp=... level=DEBUG message="Block indexed" contract=Token block=6710001 events=1
+```
+
+### Example: JSON Format
+
+```json
+{"timestamp":"...","level":"INFO","message":"Indexer starting","contracts":"2"}
+{"timestamp":"...","level":"WARNING","message":"Reorg detected","contract":"Token","forkBlock":"6710005"}
+```
+
+### Recommendations
+
+- **Production**: `logLevel: "info"` — lifecycle events and warnings
+- **Troubleshooting**: `logLevel: "debug"` — per-chunk/block detail
+- **Deep inspection**: `logLevel: "trace"` — every RPC call and poll
+- **Silent**: `enableTelemetry: false` — only errors
+
 ## Operational Notes
 
 - Use one writer process per SQLite database file.

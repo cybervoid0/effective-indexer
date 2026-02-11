@@ -1,4 +1,4 @@
-import { Context, Effect, Layer } from "effect"
+import { Context, Duration, Effect, Layer } from "effect"
 import type { StorageError } from "./errors.js"
 import {
 	type EventQuery,
@@ -48,12 +48,45 @@ export const QueryApiLive = Layer.effect(
 	Effect.gen(function* () {
 		const storage = yield* Storage
 
+		const serializeQuery = (q: EventQuery | undefined): string =>
+			JSON.stringify(q ?? {}, (_, v) =>
+				typeof v === "bigint" ? v.toString() : v,
+			)
+
 		const getEvents = (query?: EventQuery) =>
 			storage
 				.queryEvents(query ?? {})
-				.pipe(Effect.map(rows => rows.map(parseStoredEvent)))
+				.pipe(
+					Effect.map(rows => rows.map(parseStoredEvent)),
+					Effect.timed,
+					Effect.tap(([duration, results]) =>
+						Effect.logDebug("Query executed").pipe(
+							Effect.annotateLogs({
+								resultCount: results.length.toString(),
+								durationMs: Duration.toMillis(duration).toString(),
+								filters: serializeQuery(query),
+							}),
+						),
+					),
+					Effect.map(([, results]) => results),
+					Effect.withLogSpan("query"),
+				)
 
-		const getEventCount = (query?: EventQuery) => storage.countEvents(query)
+		const getEventCount = (query?: EventQuery) =>
+			storage.countEvents(query).pipe(
+				Effect.timed,
+				Effect.tap(([duration, count]) =>
+					Effect.logDebug("Count executed").pipe(
+						Effect.annotateLogs({
+							count: count.toString(),
+							durationMs: Duration.toMillis(duration).toString(),
+							filters: serializeQuery(query),
+						}),
+					),
+				),
+				Effect.map(([, count]) => count),
+				Effect.withLogSpan("count"),
+			)
 
 		const getLatestBlock = (contractName: string) =>
 			storage

@@ -143,6 +143,7 @@ export const StorageLive = Layer.effect(
           block_hash   TEXT NOT NULL
         )
       `
+			yield* Effect.logDebug("Storage schema initialized")
 		}).pipe(Effect.mapError(wrapSqlError("initialize")))
 
 		const insertEvents = (events: ReadonlyArray<InsertEvent>) =>

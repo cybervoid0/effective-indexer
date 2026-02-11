@@ -49,6 +49,13 @@ export const ReorgDetectorLive = Layer.effect(
 				if (block.number > 0n) {
 					const prevHash = buffer.get(block.number - 1n)
 					if (prevHash !== undefined && prevHash !== block.parentHash) {
+						yield* Effect.logWarning("Parent hash mismatch").pipe(
+							Effect.annotateLogs({
+								block: block.number.toString(),
+								expected: prevHash,
+								actual: block.parentHash,
+							}),
+						)
 						return yield* new ReorgDetected({
 							forkBlock: block.number - 1n,
 							expectedHash: prevHash,
@@ -78,6 +85,11 @@ export const ReorgDetectorLive = Layer.effect(
 				yield* Ref.set(
 					blockHashBuffer,
 					new Map(remaining.map(h => [h.blockNumber, h.blockHash])),
+				)
+				yield* Effect.logDebug("Reorg rollback complete").pipe(
+					Effect.annotateLogs({
+						fromBlock: forkBlock.toString(),
+					}),
 				)
 			})
 

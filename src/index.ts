@@ -1,6 +1,7 @@
 import { SqliteClient } from "@effect/sql-sqlite-node"
 import { Effect, Layer, ManagedRuntime } from "effect"
-import { ConfigLive, type IndexerConfig } from "./config.js"
+import { ConfigLive, type IndexerConfig, resolveConfig } from "./config.js"
+import { LoggerLive } from "./logger.js"
 import { BlockCursorLive } from "./pipeline/BlockCursor.js"
 import { runIndexer } from "./pipeline/Indexer.js"
 import { ReorgDetectorLive } from "./pipeline/ReorgDetector.js"
@@ -16,7 +17,8 @@ export type {
 	IndexerConfig,
 	ResolvedConfig,
 } from "./config.js"
-export { Config, ConfigLive } from "./config.js"
+export { Config, ConfigLive, resolveConfig } from "./config.js"
+export { LoggerLive } from "./logger.js"
 export type {
 	CheckpointError,
 	ConfigError,
@@ -48,10 +50,12 @@ export interface IndexerHandle {
 }
 
 const buildLayers = (config: IndexerConfig) => {
+	const resolved = resolveConfig(config)
 	const ConfigLayer = ConfigLive(config)
 	const SqliteLayer = SqliteClient.layer({
 		filename: config.dbPath ?? "./indexer.db",
 	})
+	const LoggerLayer = LoggerLive(resolved)
 
 	// Foundation: Config + SQLite
 	const FoundationLayer = Layer.merge(ConfigLayer, SqliteLayer)
@@ -92,6 +96,7 @@ const buildLayers = (config: IndexerConfig) => {
 		CursorLayer,
 		ReorgLayer,
 		QueryLayer,
+		LoggerLayer,
 	)
 }
 

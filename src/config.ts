@@ -18,6 +18,16 @@ export interface IndexerConfig {
 	readonly confirmations?: number | undefined
 	readonly maxRetries?: number | undefined
 	readonly reorgDepth?: number | undefined
+	readonly logLevel?:
+		| "trace"
+		| "debug"
+		| "info"
+		| "warning"
+		| "error"
+		| "none"
+		| undefined
+	readonly logFormat?: "pretty" | "json" | "structured" | undefined
+	readonly enableTelemetry?: boolean | undefined
 }
 
 export interface ResolvedConfig {
@@ -29,6 +39,15 @@ export interface ResolvedConfig {
 	readonly confirmations: number
 	readonly maxRetries: number
 	readonly reorgDepth: number
+	readonly logLevel:
+		| "trace"
+		| "debug"
+		| "info"
+		| "warning"
+		| "error"
+		| "none"
+	readonly logFormat: "pretty" | "json" | "structured"
+	readonly enableTelemetry: boolean
 }
 
 export const resolveConfig = (config: IndexerConfig): ResolvedConfig => ({
@@ -40,6 +59,9 @@ export const resolveConfig = (config: IndexerConfig): ResolvedConfig => ({
 	confirmations: config.confirmations ?? 0,
 	maxRetries: config.maxRetries ?? 5,
 	reorgDepth: config.reorgDepth ?? 10,
+	logLevel: config.logLevel ?? "info",
+	logFormat: config.logFormat ?? "pretty",
+	enableTelemetry: config.enableTelemetry ?? true,
 })
 
 export class Config extends Context.Tag("@rootstock/indexer/Config")<
