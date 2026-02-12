@@ -7,6 +7,7 @@ export interface ResolveIndexerConfigFromEnvOptions {
 	readonly sensitiveEnvNames?: readonly string[] | undefined
 }
 
+// Effect Config provider expects a flat map of string values.
 const toConfigMap = (
 	env: Readonly<Record<string, string | undefined>>,
 ): Map<string, string> => {
@@ -63,6 +64,7 @@ const readRequiredRedactedString = (
 	}
 }
 
+// Supports Hardhat-like placeholders, e.g. "{{EVM_RPC_API_KEY}}".
 const resolveRpcUrl = (
 	template: string,
 	provider: ConfigProvider.ConfigProvider,
@@ -74,6 +76,9 @@ const resolveRpcUrl = (
 			: readRequiredString(envName, provider),
 	)
 
+/**
+ * Resolves runtime env placeholders while keeping the public API plain TypeScript.
+ */
 export const resolveIndexerConfigFromEnv = <T extends IndexerConfig>(
 	config: T,
 	options?: ResolveIndexerConfigFromEnvOptions,

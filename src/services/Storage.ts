@@ -26,6 +26,9 @@ export interface StoredBlockHash {
 	readonly block_hash: string
 }
 
+/**
+ * Insert payload for a decoded blockchain event.
+ */
 export interface InsertEvent {
 	readonly contractName: string
 	readonly eventName: string
@@ -36,6 +39,9 @@ export interface InsertEvent {
 	readonly args: Record<string, unknown>
 }
 
+/**
+ * Query filters and pagination for reading indexed events.
+ */
 export interface EventQuery {
 	readonly contractName?: string | undefined
 	readonly eventName?: string | undefined
@@ -69,6 +75,9 @@ const wrapSqlError = (operation: string) => (e: SqlError) =>
 const toJsonValue = (_key: string, value: unknown): unknown =>
 	typeof value === "bigint" ? value.toString() : value
 
+/**
+ * Persistence boundary for events, checkpoints, and block hashes.
+ */
 export class Storage extends Context.Tag("effective-indexer/Storage")<
 	Storage,
 	{
@@ -109,12 +118,16 @@ export class Storage extends Context.Tag("effective-indexer/Storage")<
 	}
 >() {}
 
+/**
+ * SQLite-backed storage implementation.
+ */
 export const StorageLive = Layer.effect(
 	Storage,
 	Effect.gen(function* () {
 		const sql = yield* SqlClient.SqlClient
 
 		const initialize = Effect.gen(function* () {
+			// Keep schema bootstrap idempotent for repeated worker restarts.
 			yield* sql`
         CREATE TABLE IF NOT EXISTS events (
           id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,6 +165,7 @@ export const StorageLive = Layer.effect(
 		const insertEvents = (events: ReadonlyArray<InsertEvent>) =>
 			Effect.gen(function* () {
 				for (const event of events) {
+					// JSON payload must be bigint-safe for EVM numeric fields.
 					const argsJson = JSON.stringify(event.args, toJsonValue)
 					const blockNum = Number(event.blockNumber)
 					const ts = event.timestamp !== null ? Number(event.timestamp) : null

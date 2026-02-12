@@ -22,6 +22,7 @@ type IndexerDeps =
 	| ProgressReporter
 	| ProgressRenderer
 
+// One contract = one stream: backfill first, then switch to live mode.
 const indexContract = (
 	contract: ContractConfig,
 ): Stream.Stream<DecodedEvent, IndexerError, IndexerDeps> =>
@@ -52,7 +53,7 @@ const indexContract = (
 
 			const topics = buildTopicFilter(contract.abi, contract.events)
 
-			// --- Phase 1: Historical Backfill ---
+			// Phase 1: historical catch-up to current head.
 			const needsBackfill = startBlock <= currentHead
 			const totalBackfillBlocks = currentHead - startBlock + 1n
 			if (needsBackfill) {
@@ -81,7 +82,7 @@ const indexContract = (
 									rawLogs,
 								)
 
-								// Get block info for timestamps and reorg verification
+								// Enrich logs with block metadata and reorg validation.
 								const blockNumbers = [
 									...new Set(decoded.map(d => d.blockNumber)),
 								]
@@ -122,6 +123,7 @@ const indexContract = (
 									)
 								}
 
+								// Keep progress monotonic even when a chunk yields zero events.
 								const chunkSize = BigInt(config.network.logs.chunkSize)
 								const lastProcessed = yield* Ref.modify(
 									processedBlocksRef,
@@ -157,7 +159,7 @@ const indexContract = (
 					)
 				: Stream.empty
 
-			// --- Phase 2: Live Polling ---
+			// Phase 2: steady-state indexing for newly confirmed blocks.
 			const liveStream: Stream.Stream<DecodedEvent, IndexerError, never> =
 				blockCursor.liveBlocks.pipe(
 					Stream.mapEffect(blockNumber =>
@@ -279,6 +281,7 @@ export const runIndexer: Effect.Effect<void, IndexerError, IndexerDeps> =
 
 		yield* renderer.startRendering()
 
+		// Contracts are indexed independently and merged concurrently.
 		const streams = config.contracts.map(c => indexContract(c))
 
 		yield* Stream.mergeAll(streams, { concurrency: streams.length }).pipe(

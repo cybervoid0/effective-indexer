@@ -47,6 +47,9 @@ const buildSummaryLine = (
 	return `[Backfill complete] ${snap.contractName}: ${total} blocks | ${events} events | ${chunks} chunks | ${dur} (${bps} blk/s, ${eps} ev/s) | p=${p} | chunkSize=${chunk}`
 }
 
+/**
+ * Service contract for rendering CLI backfill progress.
+ */
 export interface ProgressRendererService {
 	readonly startRendering: () => Effect.Effect<void>
 	readonly stopRendering: () => Effect.Effect<void>
@@ -56,10 +59,16 @@ export interface ProgressRendererService {
 	) => Effect.Effect<void>
 }
 
+/**
+ * Progress renderer service tag.
+ */
 export class ProgressRenderer extends Context.Tag(
 	"effective-indexer/ProgressRenderer",
 )<ProgressRenderer, ProgressRendererService>() {}
 
+/**
+ * Terminal/console renderer implementation for progress snapshots.
+ */
 export const ProgressRendererLive: Layer.Layer<
 	ProgressRenderer,
 	never,

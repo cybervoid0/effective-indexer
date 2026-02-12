@@ -4,6 +4,9 @@ import { decodeEventLog } from "viem"
 import { DecodeError } from "../errors.js"
 import type { RawLog } from "./RpcProvider.js"
 
+/**
+ * Decoded and normalized contract event.
+ */
 export interface DecodedEvent {
 	readonly contractName: string
 	readonly eventName: string
@@ -15,6 +18,9 @@ export interface DecodedEvent {
 	readonly args: Record<string, unknown>
 }
 
+/**
+ * Decodes raw RPC logs into typed event payloads.
+ */
 export class EventDecoder extends Context.Tag("effective-indexer/EventDecoder")<
 	EventDecoder,
 	{
@@ -60,6 +66,9 @@ const decodeLog = (
 	}
 }
 
+/**
+ * Stateless decoder implementation.
+ */
 export const EventDecoderLive = Layer.succeed(EventDecoder, {
 	decode: (contractName: string, abi: Abi, log: RawLog) =>
 		Effect.try({

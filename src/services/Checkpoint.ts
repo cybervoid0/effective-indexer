@@ -5,6 +5,9 @@ import { Storage } from "./Storage.js"
 
 export { Checkpoint } from "./Storage.js"
 
+/**
+ * Manages per-contract indexing checkpoints.
+ */
 export class CheckpointManager extends Context.Tag(
 	"effective-indexer/CheckpointManager",
 )<
@@ -25,6 +28,9 @@ export class CheckpointManager extends Context.Tag(
 	}
 >() {}
 
+/**
+ * Storage-backed checkpoint manager implementation.
+ */
 export const CheckpointManagerLive = Layer.effect(
 	CheckpointManager,
 	Effect.gen(function* () {

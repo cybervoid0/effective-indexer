@@ -4,6 +4,9 @@ import { createPublicClient, http } from "viem"
 import { Config } from "../config.js"
 import { RpcError } from "../errors.js"
 
+/**
+ * Normalized event log shape returned by the provider.
+ */
 export interface RawLog {
 	readonly address: string
 	readonly topics: readonly string[]
@@ -14,6 +17,9 @@ export interface RawLog {
 	readonly blockHash: string
 }
 
+/**
+ * Minimal block metadata used by indexing and reorg checks.
+ */
 export interface BlockInfo {
 	readonly number: bigint
 	readonly hash: string
@@ -21,6 +27,9 @@ export interface BlockInfo {
 	readonly timestamp: bigint
 }
 
+/**
+ * Parameter object for an eth_getLogs request.
+ */
 export interface GetLogsParams {
 	readonly address: string | readonly string[]
 	readonly topics: readonly (readonly string[])[]
@@ -40,6 +49,9 @@ interface EthGetLogsResult {
 
 const toHexQuantity = (value: bigint): Hex => `0x${value.toString(16)}` as Hex
 
+/**
+ * RPC facade used by indexing pipelines.
+ */
 export class RpcProvider extends Context.Tag("effective-indexer/RpcProvider")<
 	RpcProvider,
 	{
@@ -53,6 +65,9 @@ export class RpcProvider extends Context.Tag("effective-indexer/RpcProvider")<
 	}
 >() {}
 
+/**
+ * Viem-based RPC implementation.
+ */
 export const RpcProviderLive = Layer.effect(
 	RpcProvider,
 	Effect.gen(function* () {
@@ -73,6 +88,7 @@ export const RpcProviderLive = Layer.effect(
 
 		const getLogs = (params: GetLogsParams) =>
 			Effect.tryPromise({
+				// Use raw request to pass topics exactly as eth_getLogs expects.
 				try: () =>
 					client.request({
 						method: "eth_getLogs",

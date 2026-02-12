@@ -26,6 +26,9 @@ export const buildTopicFilter = (
 	return topics
 }
 
+/**
+ * Fetches historical logs in deterministic chunk order with bounded concurrency.
+ */
 export const fetchLogs = (params: {
 	readonly address: string
 	readonly topics: readonly string[]
@@ -70,6 +73,7 @@ export const fetchLogs = (params: {
 									toBlock: chunk.to,
 								})
 								.pipe(
+									// Retry policy is exponential and bounded by maxDelayMs.
 									Effect.tapError(e =>
 										Effect.gen(function* () {
 											const n = yield* Ref.getAndUpdate(attempt, a => a + 1)

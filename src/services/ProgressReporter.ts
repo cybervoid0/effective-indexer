@@ -1,5 +1,8 @@
 import { Context, Effect, Layer, Ref } from "effect"
 
+/**
+ * Mutable per-contract progress state for ongoing backfill.
+ */
 export interface BackfillProgress {
 	readonly contractName: string
 	readonly totalBlocks: bigint
@@ -9,6 +12,9 @@ export interface BackfillProgress {
 	readonly startedAt: number
 }
 
+/**
+ * Derived read-model used by progress renderers.
+ */
 export interface ProgressSnapshot {
 	readonly contractName: string
 	readonly totalBlocks: bigint
@@ -22,6 +28,9 @@ export interface ProgressSnapshot {
 	readonly etaMs: number | null
 }
 
+/**
+ * Derives rates, completion percentage, and ETA from live state.
+ */
 export const computeSnapshot = (p: BackfillProgress): ProgressSnapshot => {
 	const now = Date.now()
 	const elapsedMs = Math.max(now - p.startedAt, 1)
@@ -49,6 +58,9 @@ export const computeSnapshot = (p: BackfillProgress): ProgressSnapshot => {
 	}
 }
 
+/**
+ * Service contract for collecting backfill progress metrics.
+ */
 export interface ProgressReporterService {
 	readonly start: (
 		contractName: string,
@@ -67,10 +79,16 @@ export interface ProgressReporterService {
 	readonly getAllSnapshots: () => Effect.Effect<ReadonlyArray<ProgressSnapshot>>
 }
 
+/**
+ * Progress reporting service tag.
+ */
 export class ProgressReporter extends Context.Tag(
 	"effective-indexer/ProgressReporter",
 )<ProgressReporter, ProgressReporterService>() {}
 
+/**
+ * In-memory progress reporter implementation.
+ */
 export const ProgressReporterLive: Layer.Layer<ProgressReporter> = Layer.effect(
 	ProgressReporter,
 	Effect.gen(function* () {

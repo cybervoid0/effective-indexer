@@ -118,7 +118,7 @@ const buildLayers = (config: IndexerConfig) => {
 	})
 	const LoggerLayer = LoggerLive(resolved)
 
-	// Foundation: Config + SQLite
+	// Foundation: resolved config + sqlite client.
 	const FoundationLayer = Layer.merge(ConfigLayer, SqliteLayer)
 
 	// Storage depends on SqlClient (from SqliteLayer)
@@ -127,7 +127,7 @@ const buildLayers = (config: IndexerConfig) => {
 	// RpcProvider depends on Config
 	const RpcLayer = RpcProviderLive.pipe(Layer.provide(ConfigLayer))
 
-	// EventDecoder has no dependencies
+	// Pure decoder, no runtime dependencies.
 	const DecoderLayer = EventDecoderLive
 
 	// Checkpoint depends on Storage
@@ -148,7 +148,7 @@ const buildLayers = (config: IndexerConfig) => {
 	// QueryApi depends on Storage
 	const QueryLayer = QueryApiLive.pipe(Layer.provide(StorageLayer))
 
-	// ProgressReporter has no dependencies
+	// In-memory progress tracker.
 	const ProgressReporterLayer = ProgressReporterLive
 
 	// ProgressRenderer depends on Config + ProgressReporter
@@ -187,7 +187,7 @@ export const createIndexer = (config: IndexerConfig): IndexerHandle => {
 			runningPromise = runtime.runPromise(runIndexer, {
 				signal: controller.signal,
 			})
-			// Avoid unhandled rejections while still surfacing errors on stop().
+			// Prevent unhandled rejections while keeping failures visible.
 			runningPromise.catch(error => {
 				if (!controller.signal.aborted) {
 					console.error("Indexer background worker failed:", error)
@@ -250,6 +250,9 @@ const ensureDbDirectory = async (config: IndexerConfig): Promise<void> => {
 	await mkdir(dirname(dbPath), { recursive: true })
 }
 
+/**
+ * Runs a long-lived worker process with graceful shutdown and DB bootstrap.
+ */
 export const runIndexerWorker = async (
 	config: IndexerConfig,
 	options?: RunIndexerWorkerOptions,
@@ -267,6 +270,7 @@ export const runIndexerWorker = async (
 	await indexer.start()
 
 	await new Promise<void>((resolve, reject) => {
+		// A pending promise alone does not keep Node alive.
 		const keepAliveTimer = runtime.setInterval(
 			() => undefined,
 			keepAliveIntervalMs,

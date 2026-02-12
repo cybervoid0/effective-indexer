@@ -3,6 +3,9 @@ import { Config } from "../config.js"
 import type { RpcError } from "../errors.js"
 import { RpcProvider } from "../services/RpcProvider.js"
 
+/**
+ * Emits newly confirmed block numbers for live indexing.
+ */
 export class BlockCursor extends Context.Tag("effective-indexer/BlockCursor")<
 	BlockCursor,
 	{
@@ -10,6 +13,9 @@ export class BlockCursor extends Context.Tag("effective-indexer/BlockCursor")<
 	}
 >() {}
 
+/**
+ * Polling-based block cursor implementation.
+ */
 export const BlockCursorLive = Layer.effect(
 	BlockCursor,
 	Effect.gen(function* () {

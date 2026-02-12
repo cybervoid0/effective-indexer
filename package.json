@@ -1,10 +1,16 @@
 {
 	"name": "effective-indexer",
-	"version": "0.2.3",
+	"version": "0.2.4",
 	"author": {
 		"name": "Aleksandr Shenshin",
 		"email": "mail@cybervoid.my"
 	},
+	"contributors": [
+		{
+			"name": "Alexander Ivchenko (@TravellerOnTheRun)",
+			"url": "https://github.com/TravellerOnTheRun"
+		}
+	],
 	"description": "Lightweight EVM smart contract event indexer built with Effect",
 	"repository": {
 		"type": "git",
@@ -14,7 +20,7 @@
 	"bugs": {
 		"url": "https://github.com/cybervoid0/effective-indexer/issues"
 	},
-	"license": "MIT",
+	"license": "UNLICENSED",
 	"type": "module",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.js",

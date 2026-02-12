@@ -4,6 +4,9 @@ import { ReorgDetected, type StorageError } from "../errors.js"
 import type { BlockInfo } from "../services/RpcProvider.js"
 import { Storage } from "../services/Storage.js"
 
+/**
+ * Detects chain reorganizations and coordinates rollback handling.
+ */
 export class ReorgDetector extends Context.Tag(
 	"effective-indexer/ReorgDetector",
 )<
@@ -18,6 +21,9 @@ export class ReorgDetector extends Context.Tag(
 	}
 >() {}
 
+/**
+ * Live implementation backed by persisted block hash history.
+ */
 export const ReorgDetectorLive = Layer.effect(
 	ReorgDetector,
 	Effect.gen(function* () {
@@ -28,6 +34,7 @@ export const ReorgDetectorLive = Layer.effect(
 		const blockHashBuffer = yield* Ref.make<Map<bigint, string>>(new Map())
 		const initialized = yield* Ref.make(false)
 
+		// Lazy bootstrap from persisted block hashes keeps startup non-blocking.
 		const ensureInitialized = Effect.gen(function* () {
 			const isInit = yield* Ref.get(initialized)
 			if (!isInit) {
@@ -40,6 +47,7 @@ export const ReorgDetectorLive = Layer.effect(
 			}
 		})
 
+		// Validates parent linkage and advances the reorg buffer.
 		const verifyBlock = (block: BlockInfo) =>
 			Effect.gen(function* () {
 				yield* ensureInitialized
@@ -77,6 +85,7 @@ export const ReorgDetectorLive = Layer.effect(
 				yield* storage.insertBlockHash(block.number, block.hash)
 			})
 
+		// Drops forked history and rebuilds in-memory state from storage.
 		const handleReorg = (forkBlock: bigint) =>
 			Effect.gen(function* () {
 				yield* storage.deleteEventsFrom(forkBlock)
