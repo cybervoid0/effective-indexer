@@ -6,6 +6,14 @@
 		"email": "mail@cybervoid.my"
 	},
 	"description": "Lightweight EVM smart contract event indexer built with Effect",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/cybervoid0/effective-indexer.git"
+	},
+	"homepage": "https://github.com/cybervoid0/effective-indexer#readme",
+	"bugs": {
+		"url": "https://github.com/cybervoid0/effective-indexer/issues"
+	},
 	"license": "MIT",
 	"type": "module",
 	"main": "./dist/index.cjs",
@@ -62,6 +70,8 @@
 		"@effect/platform-node": "^0.104.1",
 		"@effect/sql": "^0.49.0",
 		"@effect/sql-sqlite-node": "^0.50.1",
+		"log-update": "^6.1.0",
+		"picocolors": "^1.1.1",
 		"viem": "^2.45.3"
 	},
 	"devDependencies": {

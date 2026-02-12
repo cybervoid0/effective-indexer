@@ -14,7 +14,9 @@
 			"Bash(npx vitest:*)",
 			"Bash(npm run typecheck:*)",
 			"Bash(npm test:*)",
-			"Bash(npm run build:*)"
+			"Bash(npm run build:*)",
+			"WebSearch",
+			"Bash(npm run check:*)"
 		]
 	}
 }

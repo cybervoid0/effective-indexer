@@ -8,6 +8,8 @@ import { ReorgDetectorLive } from "./pipeline/ReorgDetector.js"
 import { type ParsedEvent, QueryApi, QueryApiLive } from "./query.js"
 import { CheckpointManagerLive } from "./services/Checkpoint.js"
 import { EventDecoderLive } from "./services/EventDecoder.js"
+import { ProgressRendererLive } from "./services/ProgressRenderer.js"
+import { ProgressReporterLive } from "./services/ProgressReporter.js"
 import { RpcProviderLive } from "./services/RpcProvider.js"
 import type { EventQuery } from "./services/Storage.js"
 import { StorageLive } from "./services/Storage.js"
@@ -18,14 +20,18 @@ export type {
 	LogsConfig,
 	NetworkConfig,
 	PollingConfig,
+	ProgressConfig,
 	ReorgConfig,
 	ResolvedConfig,
 	ResolvedLogsConfig,
 	ResolvedNetworkConfig,
 	ResolvedPollingConfig,
+	ResolvedProgressConfig,
 	ResolvedReorgConfig,
 	ResolvedRetryConfig,
+	ResolvedTelemetryConfig,
 	RetryConfig,
+	TelemetryConfig,
 } from "./config.js"
 export { Config, ConfigLive, resolveConfig } from "./config.js"
 export type {
@@ -48,6 +54,19 @@ export {
 } from "./services/Checkpoint.js"
 export type { DecodedEvent } from "./services/EventDecoder.js"
 export { EventDecoder, EventDecoderLive } from "./services/EventDecoder.js"
+export {
+	ProgressRenderer,
+	ProgressRendererLive,
+} from "./services/ProgressRenderer.js"
+export type {
+	BackfillProgress,
+	ProgressSnapshot,
+} from "./services/ProgressReporter.js"
+export {
+	computeSnapshot,
+	ProgressReporter,
+	ProgressReporterLive,
+} from "./services/ProgressReporter.js"
 export { RpcProvider, RpcProviderLive } from "./services/RpcProvider.js"
 export type { EventQuery } from "./services/Storage.js"
 export { Storage, StorageLive } from "./services/Storage.js"
@@ -97,6 +116,14 @@ const buildLayers = (config: IndexerConfig) => {
 	// QueryApi depends on Storage
 	const QueryLayer = QueryApiLive.pipe(Layer.provide(StorageLayer))
 
+	// ProgressReporter has no dependencies
+	const ProgressReporterLayer = ProgressReporterLive
+
+	// ProgressRenderer depends on Config + ProgressReporter
+	const ProgressRendererLayer = ProgressRendererLive.pipe(
+		Layer.provide(Layer.merge(ConfigLayer, ProgressReporterLayer)),
+	)
+
 	return Layer.mergeAll(
 		ConfigLayer,
 		StorageLayer,
@@ -106,6 +133,8 @@ const buildLayers = (config: IndexerConfig) => {
 		CursorLayer,
 		ReorgLayer,
 		QueryLayer,
+		ProgressReporterLayer,
+		ProgressRendererLayer,
 		LoggerLayer,
 	)
 }

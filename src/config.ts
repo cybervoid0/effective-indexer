@@ -1,5 +1,6 @@
 import { Context, Layer } from "effect"
 import type { Abi } from "viem"
+import { ConfigError } from "./errors.js"
 
 export interface ContractConfig {
 	readonly name: string
@@ -25,10 +26,20 @@ export interface LogsConfig {
 	readonly chunkSize?: number | undefined
 	readonly maxRetries?: number | undefined
 	readonly retry?: RetryConfig | undefined
+	readonly parallelRequests?: number | undefined
 }
 
 export interface ReorgConfig {
 	readonly depth?: number | undefined
+}
+
+export interface ProgressConfig {
+	readonly enabled?: boolean | undefined
+	readonly intervalMs?: number | undefined
+}
+
+export interface TelemetryConfig {
+	readonly progress?: ProgressConfig | undefined
 }
 
 export interface NetworkConfig {
@@ -53,10 +64,20 @@ export interface ResolvedLogsConfig {
 	readonly chunkSize: number
 	readonly maxRetries: number
 	readonly retry: ResolvedRetryConfig
+	readonly parallelRequests: number
 }
 
 export interface ResolvedReorgConfig {
 	readonly depth: number
+}
+
+export interface ResolvedProgressConfig {
+	readonly enabled: boolean
+	readonly intervalMs: number
+}
+
+export interface ResolvedTelemetryConfig {
+	readonly progress: ResolvedProgressConfig
 }
 
 export interface ResolvedNetworkConfig {
@@ -72,6 +93,7 @@ export interface IndexerConfig {
 	readonly dbPath?: string | undefined
 	readonly contracts: readonly [ContractConfig, ...ContractConfig[]]
 	readonly network?: NetworkConfig | undefined
+	readonly telemetry?: TelemetryConfig | undefined
 
 	// Logging (not network-specific)
 	readonly logLevel?:
@@ -91,6 +113,7 @@ export interface ResolvedConfig {
 	readonly dbPath: string
 	readonly contracts: readonly [ContractConfig, ...ContractConfig[]]
 	readonly network: ResolvedNetworkConfig
+	readonly telemetry: ResolvedTelemetryConfig
 	readonly logLevel: "trace" | "debug" | "info" | "warning" | "error" | "none"
 	readonly logFormat: "pretty" | "json" | "structured"
 	readonly enableTelemetry: boolean
@@ -110,6 +133,7 @@ const resolveNetwork = (config: IndexerConfig): ResolvedNetworkConfig => {
 				baseDelayMs: n?.logs?.retry?.baseDelayMs ?? 1000,
 				maxDelayMs: n?.logs?.retry?.maxDelayMs ?? 30000,
 			},
+			parallelRequests: n?.logs?.parallelRequests ?? 1,
 		},
 		reorg: {
 			depth: n?.reorg?.depth ?? 20,
@@ -117,13 +141,42 @@ const resolveNetwork = (config: IndexerConfig): ResolvedNetworkConfig => {
 	}
 }
 
+const resolveTelemetry = (config: IndexerConfig): ResolvedTelemetryConfig => {
+	const t = config.telemetry
+	return {
+		progress: {
+			enabled: t?.progress?.enabled ?? true,
+			intervalMs: t?.progress?.intervalMs ?? 3000,
+		},
+	}
+}
+
 export const resolveConfig = (config: IndexerConfig): ResolvedConfig => {
 	const network = resolveNetwork(config)
+	const telemetry = resolveTelemetry(config)
+
+	const pr = network.logs.parallelRequests
+	if (!Number.isInteger(pr) || pr < 1) {
+		throw new ConfigError({
+			reason: "parallelRequests must be an integer >= 1",
+			field: "network.logs.parallelRequests",
+		})
+	}
+
+	const pi = telemetry.progress.intervalMs
+	if (!Number.isInteger(pi) || !Number.isFinite(pi) || pi < 500) {
+		throw new ConfigError({
+			reason: "telemetry.progress.intervalMs must be an integer >= 500",
+			field: "telemetry.progress.intervalMs",
+		})
+	}
+
 	return {
 		rpcUrl: config.rpcUrl,
 		dbPath: config.dbPath ?? "./indexer.db",
 		contracts: config.contracts,
 		network,
+		telemetry,
 		logLevel: config.logLevel ?? "info",
 		logFormat: config.logFormat ?? "pretty",
 		enableTelemetry: config.enableTelemetry ?? true,
