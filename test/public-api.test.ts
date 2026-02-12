@@ -75,4 +75,23 @@ describe("Public API", () => {
 		await indexer.stop()
 		consoleErrorSpy.mockRestore()
 	})
+
+	it("stop is idempotent", async () => {
+		const { createIndexer } = await loadIndexModule(Effect.never)
+		const indexer = createIndexer({
+			rpcUrl: "http://localhost",
+			dbPath: ":memory:",
+			contracts: [
+				{
+					name: "Test",
+					address: "0x1111111111111111111111111111111111111111",
+					abi: ERC20_ABI,
+					events: ["Transfer"],
+				},
+			],
+		})
+
+		await indexer.start()
+		await Promise.all([indexer.stop(), indexer.stop(), indexer.stop()])
+	})
 })

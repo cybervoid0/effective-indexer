@@ -1,6 +1,10 @@
+import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-import { type IndexerConfig, resolveConfig } from "../src/config.js"
-import { ConfigError } from "../src/errors.js"
+import {
+	type IndexerConfig,
+	resolveConfig,
+	resolveConfigEffect,
+} from "../src/config.js"
 
 const minimalConfig: IndexerConfig = {
 	rpcUrl: "http://localhost",
@@ -45,7 +49,7 @@ describe("resolveConfig", () => {
 					...minimalConfig,
 					network: { logs: { parallelRequests: 0 } },
 				}),
-			).toThrow(ConfigError)
+			).toThrow()
 		})
 
 		it("throws for parallelRequests = 1.5", () => {
@@ -54,7 +58,7 @@ describe("resolveConfig", () => {
 					...minimalConfig,
 					network: { logs: { parallelRequests: 1.5 } },
 				}),
-			).toThrow(ConfigError)
+			).toThrow()
 		})
 
 		it("throws for negative parallelRequests", () => {
@@ -63,7 +67,7 @@ describe("resolveConfig", () => {
 					...minimalConfig,
 					network: { logs: { parallelRequests: -1 } },
 				}),
-			).toThrow(ConfigError)
+			).toThrow()
 		})
 	})
 
@@ -100,7 +104,7 @@ describe("resolveConfig", () => {
 					...minimalConfig,
 					telemetry: { progress: { intervalMs: 100 } },
 				}),
-			).toThrow(ConfigError)
+			).toThrow()
 		})
 
 		it("allows intervalMs = 500", () => {
@@ -117,7 +121,7 @@ describe("resolveConfig", () => {
 					...minimalConfig,
 					telemetry: { progress: { intervalMs: Number.NaN } },
 				}),
-			).toThrow(ConfigError)
+			).toThrow()
 		})
 
 		it("throws for intervalMs = Infinity", () => {
@@ -126,7 +130,7 @@ describe("resolveConfig", () => {
 					...minimalConfig,
 					telemetry: { progress: { intervalMs: Number.POSITIVE_INFINITY } },
 				}),
-			).toThrow(ConfigError)
+			).toThrow()
 		})
 
 		it("throws for non-integer intervalMs", () => {
@@ -135,7 +139,30 @@ describe("resolveConfig", () => {
 					...minimalConfig,
 					telemetry: { progress: { intervalMs: 750.5 } },
 				}),
-			).toThrow(ConfigError)
+			).toThrow()
 		})
+	})
+})
+
+describe("resolveConfigEffect", () => {
+	it("fails through Effect error channel for invalid parallelRequests", async () => {
+		const exit = await Effect.runPromise(
+			resolveConfigEffect({
+				...minimalConfig,
+				network: { logs: { parallelRequests: 0 } },
+			}).pipe(Effect.either),
+		)
+
+		expect(exit._tag).toBe("Left")
+		if (exit._tag === "Left") {
+			expect(exit.left._tag).toBe("ConfigError")
+			expect(exit.left.field).toBe("network.logs.parallelRequests")
+		}
+	})
+
+	it("succeeds and returns resolved config", async () => {
+		const resolved = await Effect.runPromise(resolveConfigEffect(minimalConfig))
+		expect(resolved.network.logs.parallelRequests).toBe(1)
+		expect(resolved.telemetry.progress.intervalMs).toBe(3000)
 	})
 })

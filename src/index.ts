@@ -40,6 +40,7 @@ export {
 	ConfigLive,
 	defineIndexerConfig,
 	resolveConfig,
+	resolveConfigEffect,
 } from "./config.js"
 export {
 	type ResolveIndexerConfigFromEnvOptions,
@@ -176,6 +177,8 @@ export const createIndexer = (config: IndexerConfig): IndexerHandle => {
 	let abortController: AbortController | null = null
 	const runtime = ManagedRuntime.make(ServicesLive)
 	let runningPromise: Promise<void> | null = null
+	let stopPromise: Promise<void> | null = null
+	let disposed = false
 
 	return {
 		start: async () => {
@@ -196,21 +199,36 @@ export const createIndexer = (config: IndexerConfig): IndexerHandle => {
 		},
 
 		stop: async () => {
-			abortController?.abort()
-			const wasAborted = abortController?.signal.aborted ?? false
-			if (runningPromise !== null) {
-				try {
-					await runningPromise
-				} catch (error) {
-					if (!wasAborted) {
-						throw error
-					}
-				} finally {
-					runningPromise = null
-				}
+			if (disposed) {
+				return
 			}
-			await runtime.dispose()
-			abortController = null
+			if (stopPromise !== null) {
+				return stopPromise
+			}
+			stopPromise = (async () => {
+				abortController?.abort()
+				const wasAborted = abortController?.signal.aborted ?? false
+				if (runningPromise !== null) {
+					try {
+						await runningPromise
+					} catch (error) {
+						if (!wasAborted) {
+							throw error
+						}
+					} finally {
+						runningPromise = null
+					}
+				}
+				await runtime.dispose()
+				abortController = null
+				disposed = true
+			})()
+
+			try {
+				await stopPromise
+			} finally {
+				stopPromise = null
+			}
 		},
 
 		query: async q => {

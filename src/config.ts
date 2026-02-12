@@ -1,4 +1,4 @@
-import { Context, Layer } from "effect"
+import { Context, Effect, Layer } from "effect"
 import type { Abi } from "viem"
 import { ConfigError } from "./errors.js"
 
@@ -154,42 +154,54 @@ const resolveTelemetry = (config: IndexerConfig): ResolvedTelemetryConfig => {
 	}
 }
 
-export const resolveConfig = (config: IndexerConfig): ResolvedConfig => {
-	const network = resolveNetwork(config)
-	const telemetry = resolveTelemetry(config)
+export const resolveConfigEffect = (
+	config: IndexerConfig,
+): Effect.Effect<ResolvedConfig, ConfigError> =>
+	Effect.gen(function* () {
+		const network = resolveNetwork(config)
+		const telemetry = resolveTelemetry(config)
 
-	const pr = network.logs.parallelRequests
-	if (!Number.isInteger(pr) || pr < 1) {
-		throw new ConfigError({
-			reason: "parallelRequests must be an integer >= 1",
-			field: "network.logs.parallelRequests",
-		})
-	}
+		const pr = network.logs.parallelRequests
+		if (!Number.isInteger(pr) || pr < 1) {
+			return yield* Effect.fail(
+				new ConfigError({
+					reason: "parallelRequests must be an integer >= 1",
+					field: "network.logs.parallelRequests",
+				}),
+			)
+		}
 
-	const pi = telemetry.progress.intervalMs
-	if (!Number.isInteger(pi) || !Number.isFinite(pi) || pi < 500) {
-		throw new ConfigError({
-			reason: "telemetry.progress.intervalMs must be an integer >= 500",
-			field: "telemetry.progress.intervalMs",
-		})
-	}
+		const pi = telemetry.progress.intervalMs
+		if (!Number.isInteger(pi) || !Number.isFinite(pi) || pi < 500) {
+			return yield* Effect.fail(
+				new ConfigError({
+					reason: "telemetry.progress.intervalMs must be an integer >= 500",
+					field: "telemetry.progress.intervalMs",
+				}),
+			)
+		}
 
-	return {
-		rpcUrl: config.rpcUrl,
-		dbPath: config.dbPath ?? "./indexer.db",
-		contracts: config.contracts,
-		network,
-		telemetry,
-		logLevel: config.logLevel ?? "info",
-		logFormat: config.logFormat ?? "pretty",
-		enableTelemetry: config.enableTelemetry ?? true,
-	}
-}
+		return {
+			rpcUrl: config.rpcUrl,
+			dbPath: config.dbPath ?? "./indexer.db",
+			contracts: config.contracts,
+			network,
+			telemetry,
+			logLevel: config.logLevel ?? "info",
+			logFormat: config.logFormat ?? "pretty",
+			enableTelemetry: config.enableTelemetry ?? true,
+		}
+	})
+
+export const resolveConfig = (config: IndexerConfig): ResolvedConfig =>
+	Effect.runSync(resolveConfigEffect(config))
 
 export class Config extends Context.Tag("effective-indexer/Config")<
 	Config,
 	ResolvedConfig
 >() {}
 
-export const ConfigLive = (raw: IndexerConfig): Layer.Layer<Config> =>
-	Layer.succeed(Config, resolveConfig(raw))
+export const ConfigLive = (
+	raw: IndexerConfig,
+): Layer.Layer<Config, ConfigError> =>
+	Layer.effect(Config, resolveConfigEffect(raw))

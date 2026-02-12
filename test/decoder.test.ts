@@ -39,7 +39,7 @@ describe("EventDecoder", () => {
 			}),
 		))
 
-	it("skips undecodable logs in batch", () =>
+	it("fails batch when a log cannot be decoded", () =>
 		runTest(
 			Effect.gen(function* () {
 				const decoder = yield* EventDecoder
@@ -52,12 +52,16 @@ describe("EventDecoder", () => {
 					logIndex: 0,
 					blockHash: "0xblock",
 				}
-				const results = yield* decoder.decodeBatch("TestToken", ERC20_ABI, [
-					SAMPLE_TRANSFER_LOGS[0]!,
-					badLog,
-				])
-				expect(results).toHaveLength(1)
-				expect(results[0]!.eventName).toBe("Transfer")
+				const exit = yield* Effect.either(
+					decoder.decodeBatch("TestToken", ERC20_ABI, [
+						SAMPLE_TRANSFER_LOGS[0]!,
+						badLog,
+					]),
+				)
+				expect(exit._tag).toBe("Left")
+				if (exit._tag === "Left") {
+					expect(exit.left._tag).toBe("DecodeError")
+				}
 			}),
 		))
 })

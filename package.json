@@ -1,9 +1,9 @@
 {
 	"name": "effective-indexer",
-	"version": "0.2.4",
+	"version": "0.2.5",
 	"author": {
 		"name": "Aleksandr Shenshin",
-		"email": "mail@cybervoid.my"
+		"email": "shenshin@me.com"
 	},
 	"contributors": [
 		{
@@ -20,7 +20,7 @@
 	"bugs": {
 		"url": "https://github.com/cybervoid0/effective-indexer/issues"
 	},
-	"license": "UNLICENSED",
+	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.js",

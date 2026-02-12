@@ -77,9 +77,18 @@ export const EventDecoderLive = Layer.succeed(EventDecoder, {
 		}),
 
 	decodeBatch: (contractName: string, abi: Abi, logs: ReadonlyArray<RawLog>) =>
-		Effect.succeed(
-			logs
-				.map(log => decodeLog(contractName, abi, log))
-				.filter((e): e is DecodedEvent => e !== null),
+		Effect.forEach(logs, log =>
+			Effect.gen(function* () {
+				const decoded = decodeLog(contractName, abi, log)
+				if (decoded === null) {
+					return yield* Effect.fail(
+						new DecodeError({
+							reason: "Failed to decode log with provided ABI",
+							log,
+						}),
+					)
+				}
+				return decoded
+			}),
 		),
 })

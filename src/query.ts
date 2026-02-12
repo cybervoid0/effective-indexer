@@ -1,5 +1,5 @@
 import { Context, Duration, Effect, Layer } from "effect"
-import type { StorageError } from "./errors.js"
+import { StorageError } from "./errors.js"
 import {
 	type EventQuery,
 	Storage,
@@ -28,6 +28,19 @@ const parseStoredEvent = (row: StoredEvent): ParsedEvent => ({
 	args: JSON.parse(row.args) as Record<string, unknown>,
 })
 
+const parseStoredEventEffect = (
+	row: StoredEvent,
+): Effect.Effect<ParsedEvent, StorageError> =>
+	Effect.try({
+		try: () => parseStoredEvent(row),
+		catch: e =>
+			new StorageError({
+				reason: String(e),
+				operation: "parseStoredEvent",
+				cause: e,
+			}),
+	})
+
 export class QueryApi extends Context.Tag("effective-indexer/QueryApi")<
 	QueryApi,
 	{
@@ -55,7 +68,7 @@ export const QueryApiLive = Layer.effect(
 
 		const getEvents = (query?: EventQuery) =>
 			storage.queryEvents(query ?? {}).pipe(
-				Effect.map(rows => rows.map(parseStoredEvent)),
+				Effect.flatMap(rows => Effect.forEach(rows, parseStoredEventEffect)),
 				Effect.timed,
 				Effect.tap(([duration, results]) =>
 					Effect.logDebug("Query executed").pipe(

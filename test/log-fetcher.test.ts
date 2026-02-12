@@ -2,7 +2,11 @@ import { Chunk, Effect, Layer, Stream } from "effect"
 import { describe, expect, it } from "vitest"
 import { ConfigLive } from "../src/config.js"
 import { RpcError } from "../src/errors.js"
-import { buildTopicFilter, fetchLogs } from "../src/pipeline/LogFetcher.js"
+import {
+	buildTopicFilter,
+	buildTopicFilterEffect,
+	fetchLogs,
+} from "../src/pipeline/LogFetcher.js"
 import type { RawLog } from "../src/services/RpcProvider.js"
 import { RpcProvider } from "../src/services/RpcProvider.js"
 import { ERC20_ABI } from "./fixtures/abi.js"
@@ -21,6 +25,27 @@ describe("buildTopicFilter", () => {
 
 	it("throws for unknown event", () => {
 		expect(() => buildTopicFilter(ERC20_ABI, ["NonExistent"])).toThrow()
+	})
+})
+
+describe("buildTopicFilterEffect", () => {
+	it("returns topics for valid event names", async () => {
+		const topics = await Effect.runPromise(
+			buildTopicFilterEffect(ERC20_ABI, ["Transfer"]),
+		)
+		expect(topics).toHaveLength(1)
+		expect(topics[0]).toMatch(/^0x[0-9a-f]{64}$/)
+	})
+
+	it("fails with ConfigError for unknown event", async () => {
+		const exit = await Effect.runPromise(
+			buildTopicFilterEffect(ERC20_ABI, ["NonExistent"]).pipe(Effect.either),
+		)
+		expect(exit._tag).toBe("Left")
+		if (exit._tag === "Left") {
+			expect(exit.left._tag).toBe("ConfigError")
+			expect(exit.left.field).toBe("contracts.events")
+		}
 	})
 })
 

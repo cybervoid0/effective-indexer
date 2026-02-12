@@ -8,7 +8,7 @@ import { ProgressReporter } from "../services/ProgressReporter.js"
 import { RpcProvider } from "../services/RpcProvider.js"
 import { Storage } from "../services/Storage.js"
 import { BlockCursor } from "./BlockCursor.js"
-import { buildTopicFilter, fetchLogs } from "./LogFetcher.js"
+import { buildTopicFilterEffect, fetchLogs } from "./LogFetcher.js"
 import { ReorgDetector } from "./ReorgDetector.js"
 
 type IndexerDeps =
@@ -51,7 +51,10 @@ const indexContract = (
 				}),
 			)
 
-			const topics = buildTopicFilter(contract.abi, contract.events)
+			const topics = yield* buildTopicFilterEffect(
+				contract.abi,
+				contract.events,
+			)
 
 			// Phase 1: historical catch-up to current head.
 			const needsBackfill = startBlock <= currentHead

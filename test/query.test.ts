@@ -1,11 +1,13 @@
 import { SqliteClient } from "@effect/sql-sqlite-node"
 import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
+import type { StorageError } from "../src/errors.js"
 import { QueryApi, QueryApiLive } from "../src/query.js"
 import {
 	type InsertEvent,
 	Storage,
 	StorageLive,
+	type StoredEvent,
 } from "../src/services/Storage.js"
 
 const TestSqliteLayer = SqliteClient.layer({ filename: ":memory:" })
@@ -119,6 +121,52 @@ describe("QueryApi", () => {
 				})
 				expect(tokenATransfers).toHaveLength(1)
 				expect(tokenATransfers[0]!.contractName).toBe("TokenA")
+			}),
+		))
+
+	it("fails with StorageError for invalid JSON payload", () =>
+		runTest(
+			Effect.gen(function* () {
+				const badRow: StoredEvent = {
+					id: 1,
+					contract_name: "TestToken",
+					event_name: "Transfer",
+					block_number: 100,
+					tx_hash: "0xbad",
+					log_index: 0,
+					timestamp: null,
+					args: "{broken-json",
+				}
+
+				const FakeStorage = Layer.succeed(Storage, {
+					initialize: Effect.void,
+					insertEvents: () => Effect.void,
+					deleteEventsFrom: () => Effect.void,
+					queryEvents: () => Effect.succeed([badRow] as const),
+					countEvents: () => Effect.succeed(1),
+					insertBlockHash: () => Effect.void,
+					getBlockHash: () => Effect.succeed(null),
+					getRecentBlockHashes: () => Effect.succeed([]),
+					deleteBlockHashesFrom: () => Effect.void,
+					getCheckpoint: () => Effect.succeed(null),
+					saveCheckpoint: () => Effect.void,
+				})
+
+				const program = Effect.gen(function* () {
+					const query = yield* QueryApi
+					return yield* query.getEvents()
+				}).pipe(
+					Effect.provide(QueryApiLive.pipe(Layer.provide(FakeStorage))),
+					Effect.either,
+				)
+
+				const exit = yield* program
+				expect(exit._tag).toBe("Left")
+				if (exit._tag === "Left") {
+					expect(exit.left._tag).toBe("StorageError")
+					const error = exit.left as StorageError
+					expect(error.operation).toBe("parseStoredEvent")
+				}
 			}),
 		))
 })

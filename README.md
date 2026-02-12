@@ -20,6 +20,12 @@ npm install effective-indexer effect
 
 `effect` is a peer dependency.
 
+## License
+
+Free for noncommercial use under PolyForm Noncommercial 1.0.0.
+Commercial use requires a paid commercial license (see `LICENSE`).
+Contact: Aleksandr Shenshin <shenshin@me.com>.
+
 ## 5-minute setup
 
 ### 1) Create `indexer.config.ts`
@@ -112,13 +118,13 @@ await indexer.stop()
 
 ## Public API
 
-- `defineIndexerConfig(config)`  
+- `defineIndexerConfig(config)`
   Identity helper for typed config files (Hardhat-style).
-- `resolveIndexerConfigFromEnv(config, options?)`  
+- `resolveIndexerConfigFromEnv(config, options?)`
   Resolves `{{ENV_VAR}}` placeholders and optional RPC URL override.
-- `runIndexerWorker(config, options?)`  
+- `runIndexerWorker(config, options?)`
   Runs long-lived worker with built-in DB directory creation and graceful shutdown.
-- `Indexer.create(config)`  
+- `Indexer.create(config)`
   Returns handle: `start()`, `stop()`, `query()`, `count()`.
 
 ## Config essentials

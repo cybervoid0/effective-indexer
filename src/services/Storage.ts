@@ -75,6 +75,19 @@ const wrapSqlError = (operation: string) => (e: SqlError) =>
 const toJsonValue = (_key: string, value: unknown): unknown =>
 	typeof value === "bigint" ? value.toString() : value
 
+const INSERT_BATCH_SIZE = 250
+
+const chunkEvents = (
+	events: ReadonlyArray<InsertEvent>,
+	size: number,
+): ReadonlyArray<ReadonlyArray<InsertEvent>> => {
+	const chunks: Array<ReadonlyArray<InsertEvent>> = []
+	for (let i = 0; i < events.length; i += size) {
+		chunks.push(events.slice(i, i + size))
+	}
+	return chunks
+}
+
 /**
  * Persistence boundary for events, checkpoints, and block hashes.
  */
@@ -164,15 +177,33 @@ export const StorageLive = Layer.effect(
 
 		const insertEvents = (events: ReadonlyArray<InsertEvent>) =>
 			Effect.gen(function* () {
-				for (const event of events) {
-					// JSON payload must be bigint-safe for EVM numeric fields.
-					const argsJson = JSON.stringify(event.args, toJsonValue)
-					const blockNum = Number(event.blockNumber)
-					const ts = event.timestamp !== null ? Number(event.timestamp) : null
-					yield* sql`
-            INSERT OR IGNORE INTO events (contract_name, event_name, block_number, tx_hash, log_index, timestamp, args)
-            VALUES (${event.contractName}, ${event.eventName}, ${blockNum}, ${event.txHash}, ${event.logIndex}, ${ts}, ${argsJson})
-          `
+				if (events.length === 0) {
+					return
+				}
+				for (const batch of chunkEvents(events, INSERT_BATCH_SIZE)) {
+					const placeholders = batch
+						.map(() => "(?, ?, ?, ?, ?, ?, ?)")
+						.join(", ")
+					const params = batch.flatMap(event => {
+						// JSON payload must be bigint-safe for EVM numeric fields.
+						const argsJson = JSON.stringify(event.args, toJsonValue)
+						const blockNum = Number(event.blockNumber)
+						const ts = event.timestamp !== null ? Number(event.timestamp) : null
+						return [
+							event.contractName,
+							event.eventName,
+							blockNum,
+							event.txHash,
+							event.logIndex,
+							ts,
+							argsJson,
+						]
+					})
+					yield* sql.unsafe(
+						`INSERT OR IGNORE INTO events (contract_name, event_name, block_number, tx_hash, log_index, timestamp, args)
+            VALUES ${placeholders}`,
+						params,
+					)
 				}
 			}).pipe(Effect.mapError(wrapSqlError("insertEvents")))
 

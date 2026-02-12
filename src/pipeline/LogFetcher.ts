@@ -2,7 +2,7 @@ import { Duration, Effect, Ref, Schedule, Stream } from "effect"
 import type { Abi } from "viem"
 import { encodeEventTopics } from "viem"
 import { Config } from "../config.js"
-import type { RpcError } from "../errors.js"
+import { ConfigError, type RpcError } from "../errors.js"
 import type { RawLog } from "../services/RpcProvider.js"
 import { RpcProvider } from "../services/RpcProvider.js"
 
@@ -10,21 +10,39 @@ export const buildTopicFilter = (
 	abi: Abi,
 	eventNames: readonly string[],
 ): readonly string[] => {
-	const topics: string[] = []
-	for (const name of eventNames) {
-		const abiEvent = abi.find(
-			item => item.type === "event" && item.name === name,
-		)
-		if (!abiEvent || abiEvent.type !== "event") {
-			throw new Error(`Event "${name}" not found in ABI`)
-		}
-		const encoded = encodeEventTopics({ abi: [abiEvent], eventName: name })
-		if (encoded[0]) {
-			topics.push(encoded[0])
-		}
-	}
-	return topics
+	return Effect.runSync(buildTopicFilterEffect(abi, eventNames))
 }
+
+export const buildTopicFilterEffect = (
+	abi: Abi,
+	eventNames: readonly string[],
+): Effect.Effect<readonly string[], ConfigError> =>
+	Effect.forEach(eventNames, name =>
+		Effect.gen(function* () {
+			const abiEvent = abi.find(
+				item => item.type === "event" && item.name === name,
+			)
+			if (!abiEvent || abiEvent.type !== "event") {
+				return yield* Effect.fail(
+					new ConfigError({
+						reason: `Event "${name}" not found in ABI`,
+						field: "contracts.events",
+					}),
+				)
+			}
+			const encoded = encodeEventTopics({ abi: [abiEvent], eventName: name })
+			const topic = encoded[0]
+			if (topic === undefined) {
+				return yield* Effect.fail(
+					new ConfigError({
+						reason: `Failed to encode topic for event "${name}"`,
+						field: "contracts.events",
+					}),
+				)
+			}
+			return topic
+		}),
+	)
 
 /**
  * Fetches historical logs in deterministic chunk order with bounded concurrency.
