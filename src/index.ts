@@ -127,7 +127,11 @@ export const createIndexer = (config: IndexerConfig): IndexerHandle => {
 				signal: controller.signal,
 			})
 			// Avoid unhandled rejections while still surfacing errors on stop().
-			runningPromise.catch(() => undefined)
+			runningPromise.catch(error => {
+				if (!controller.signal.aborted) {
+					console.error("Indexer background worker failed:", error)
+				}
+			})
 		},
 
 		stop: async () => {

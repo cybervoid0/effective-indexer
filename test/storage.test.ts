@@ -72,6 +72,38 @@ describe("Storage", () => {
 			}),
 		))
 
+	it("serializes bigint values inside event args", () =>
+		runTest(
+			Effect.gen(function* () {
+				const storage = yield* Storage
+				yield* storage.initialize
+
+				yield* storage.insertEvents([
+					sampleEvent({
+						txHash: "0xbigint",
+						args: {
+							from: "0xAAA",
+							to: "0xBBB",
+							value: 1234567890123456789n,
+							nested: {
+								fee: 42n,
+							},
+						},
+					}),
+				])
+
+				const all = yield* storage.queryEvents({ txHash: "0xbigint" })
+				expect(all).toHaveLength(1)
+
+				const parsed = JSON.parse(all[0]!.args) as {
+					value: string
+					nested: { fee: string }
+				}
+				expect(parsed.value).toBe("1234567890123456789")
+				expect(parsed.nested.fee).toBe("42")
+			}),
+		))
+
 	it("deletes events from a block number", () =>
 		runTest(
 			Effect.gen(function* () {

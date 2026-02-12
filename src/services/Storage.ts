@@ -66,6 +66,9 @@ const wrapSqlError = (operation: string) => (e: SqlError) =>
 		cause: e,
 	})
 
+const toJsonValue = (_key: string, value: unknown): unknown =>
+	typeof value === "bigint" ? value.toString() : value
+
 export class Storage extends Context.Tag("effective-indexer/Storage")<
 	Storage,
 	{
@@ -149,7 +152,7 @@ export const StorageLive = Layer.effect(
 		const insertEvents = (events: ReadonlyArray<InsertEvent>) =>
 			Effect.gen(function* () {
 				for (const event of events) {
-					const argsJson = JSON.stringify(event.args)
+					const argsJson = JSON.stringify(event.args, toJsonValue)
 					const blockNum = Number(event.blockNumber)
 					const ts = event.timestamp !== null ? Number(event.timestamp) : null
 					yield* sql`
