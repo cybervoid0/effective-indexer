@@ -96,7 +96,9 @@ export const ProgressReporterLive: Layer.Layer<ProgressReporter> = Layer.effect(
 					const entry = map.get(contractName)
 					if (!entry) return map
 					const boundedProcessed =
-						processedBlocks > entry.totalBlocks ? entry.totalBlocks : processedBlocks
+						processedBlocks > entry.totalBlocks
+							? entry.totalBlocks
+							: processedBlocks
 					const nextProcessed =
 						boundedProcessed > entry.processedBlocks
 							? boundedProcessed

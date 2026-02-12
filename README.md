@@ -1,5 +1,156 @@
 # Effective Indexer
 
+EVM event indexing without hosted lock-in.
+
+`effective-indexer` runs as your own worker, writes directly to your SQLite database, and gives you a typed query API.
+
+## Why this approach
+
+- **Own your data**: events are stored in your DB, not in a third-party service.
+- **Simple operations**: one worker process, one config file, no subgraph deployment pipeline.
+- **Production-safe behavior**: checkpoint resume, reorg detection, retry/backoff, live polling.
+- **Fast backfill**: parallel `eth_getLogs` with deterministic chunk ordering.
+- **Typed DX**: TypeScript-first config and query surface.
+
+## Install
+
+```bash
+npm install effective-indexer effect
+```
+
+`effect` is a peer dependency.
+
+## 5-minute setup
+
+### 1) Create `indexer.config.ts`
+
+```ts
+import { defineIndexerConfig } from "effective-indexer"
+import type { Abi } from "viem"
+
+const transferAbi: Abi = [
+	{
+		type: "event",
+		name: "Transfer",
+		inputs: [
+			{ indexed: true, name: "from", type: "address" },
+			{ indexed: true, name: "to", type: "address" },
+			{ indexed: false, name: "value", type: "uint256" },
+		],
+	},
+]
+
+export default defineIndexerConfig({
+	rpcUrl: "https://rpc.mainnet.rootstock.io/{{EVM_RPC_API_KEY}}",
+	dbPath: "./data/events.db",
+	contracts: [
+		{
+			name: "Token",
+			address: "0xYourContractAddress",
+			abi: transferAbi,
+			events: ["Transfer"],
+			startBlock: 0n,
+		},
+	],
+	network: {
+		logs: {
+			chunkSize: 2000,
+			parallelRequests: 3,
+		},
+	},
+})
+```
+
+### 2) Create `scripts/indexer.ts`
+
+```ts
+import config from "../indexer.config"
+import { resolveIndexerConfigFromEnv, runIndexerWorker } from "effective-indexer"
+
+const resolvedConfig = resolveIndexerConfigFromEnv(config)
+
+runIndexerWorker(resolvedConfig).catch(error => {
+	console.error("Indexer worker failed:", error)
+	process.exit(1)
+})
+```
+
+### 3) Add env and run
+
+`.env`:
+
+```bash
+EVM_RPC_API_KEY=your-rpc-api-key
+# Optional full URL override:
+# EVM_RPC_URL=https://rpc.mainnet.rootstock.io/<API_KEY>
+```
+
+Run:
+
+```bash
+node --import tsx ./scripts/indexer.ts
+```
+
+## Query data
+
+```ts
+import config from "../indexer.config"
+import { Indexer, resolveIndexerConfigFromEnv } from "effective-indexer"
+
+const indexer = Indexer.create(resolveIndexerConfigFromEnv(config))
+
+const events = await indexer.query({
+	contractName: "Token",
+	eventName: "Transfer",
+	order: "desc",
+	limit: 50,
+})
+
+console.log(events.length)
+await indexer.stop()
+```
+
+## Public API
+
+- `defineIndexerConfig(config)`  
+  Identity helper for typed config files (Hardhat-style).
+- `resolveIndexerConfigFromEnv(config, options?)`  
+  Resolves `{{ENV_VAR}}` placeholders and optional RPC URL override.
+- `runIndexerWorker(config, options?)`  
+  Runs long-lived worker with built-in DB directory creation and graceful shutdown.
+- `Indexer.create(config)`  
+  Returns handle: `start()`, `stop()`, `query()`, `count()`.
+
+## Config essentials
+
+- `rpcUrl`: RPC endpoint URL (supports placeholders like `{{EVM_RPC_API_KEY}}`)
+- `dbPath`: SQLite path (default `./indexer.db`)
+- `contracts`: non-empty list of contracts and events to index
+- `network.polling`: block polling interval and confirmations
+- `network.logs`: chunk size, retries, parallel requests
+- `network.reorg.depth`: reorg buffer depth
+- `telemetry.progress`: CLI progress rendering
+- `logLevel`, `logFormat`, `enableTelemetry`
+
+## Operational notes
+
+- Run a single writer process per SQLite file.
+- Keep DB on persistent storage.
+- Worker resumes from checkpoint after restart.
+- RPC must support `eth_getLogs`.
+
+## Development
+
+```bash
+npm run build
+npm run typecheck
+npm run test
+npm run check
+```
+
+Repository: [github.com/cybervoid0/effective-indexer](https://github.com/cybervoid0/effective-indexer)
+# Effective Indexer
+
 Lightweight EVM smart contract event indexer built with [Effect](https://effect.website).
 
 Index EVM events to your own database in minutes — no hosted lock-in, no PhD required.
@@ -89,6 +240,21 @@ Returns `IndexerHandle`:
 - `query(q?: EventQuery): Promise<ParsedEvent[]>`
 - `count(q?: EventQuery): Promise<number>`
 
+### `defineIndexerConfig(config)`
+
+Identity helper for a typed config file (Hardhat-style DX).
+
+### `resolveIndexerConfigFromEnv(config, options?)`
+
+Resolves `{{ENV_VAR}}` placeholders in `rpcUrl` and supports optional RPC override from env (`EVM_RPC_URL` by default).
+
+### `runIndexerWorker(config, options?)`
+
+Runs a long-lived worker with built-in:
+- SQLite directory creation
+- graceful shutdown on `SIGINT` / `SIGTERM`
+- keep-alive process loop
+
 ### `IndexerConfig`
 
 | Field | Type | Default | Description |
@@ -161,7 +327,21 @@ Run the indexer as a dedicated long-lived worker process (not in request handler
 Create `scripts/indexer.ts`:
 
 ```ts
-import { Indexer } from "effective-indexer"
+import config from "../indexer.config"
+import { resolveIndexerConfigFromEnv, runIndexerWorker } from "effective-indexer"
+
+const resolvedConfig = resolveIndexerConfigFromEnv(config)
+
+runIndexerWorker(resolvedConfig).catch(error => {
+	console.error("Indexer worker failed:", error)
+	process.exit(1)
+})
+```
+
+Create `indexer.config.ts`:
+
+```ts
+import { defineIndexerConfig } from "effective-indexer"
 import type { Abi } from "viem"
 
 const transferAbi: Abi = [
@@ -176,104 +356,27 @@ const transferAbi: Abi = [
 	},
 ]
 
-const indexer = Indexer.create({
-	rpcUrl: process.env.EVM_RPC_URL!,
-	dbPath: process.env.INDEXER_DB_PATH ?? "./data/events.db",
+export default defineIndexerConfig({
+	rpcUrl: "https://rpc.mainnet.rootstock.io/{{EVM_RPC_API_KEY}}",
+	dbPath: "./data/events.db",
 	contracts: [
 		{
-			name: process.env.INDEXER_CONTRACT_NAME ?? "Token",
-			address: process.env.INDEXER_CONTRACT_ADDRESS!,
+			name: "Token",
+			address: "0xYourContractAddress",
 			abi: transferAbi,
 			events: ["Transfer"],
-			startBlock: BigInt(process.env.INDEXER_START_BLOCK ?? "0"),
+			startBlock: 0n,
 		},
 	],
-	network: {
-		polling: {
-			intervalMs: Number(process.env.INDEXER_POLL_INTERVAL_MS ?? "12000"),
-			confirmations: Number(process.env.INDEXER_CONFIRMATIONS ?? "1"),
-		},
-		logs: {
-			chunkSize: Number(process.env.INDEXER_CHUNK_SIZE ?? "2000"),
-			parallelRequests: Number(process.env.INDEXER_PARALLEL_REQUESTS ?? "1"),
-			maxRetries: Number(process.env.INDEXER_MAX_RETRIES ?? "5"),
-			retry: {
-				baseDelayMs: Number(process.env.INDEXER_RETRY_BASE_MS ?? "1000"),
-				maxDelayMs: Number(process.env.INDEXER_RETRY_MAX_MS ?? "30000"),
-			},
-		},
-		reorg: {
-			depth: Number(process.env.INDEXER_REORG_DEPTH ?? "20"),
-		},
-	},
-	telemetry: {
-		progress: {
-			enabled: process.env.INDEXER_PROGRESS_ENABLED !== "false",
-			intervalMs: Number(process.env.INDEXER_PROGRESS_INTERVAL_MS ?? "3000"),
-		},
-	},
-	logLevel: (process.env.INDEXER_LOG_LEVEL ?? "info") as
-		| "trace"
-		| "debug"
-		| "info"
-		| "warning"
-		| "error"
-		| "none",
-	logFormat: (process.env.INDEXER_LOG_FORMAT ?? "pretty") as
-		| "pretty"
-		| "json"
-		| "structured",
-	enableTelemetry: process.env.INDEXER_TELEMETRY !== "false",
-})
-
-const start = async (): Promise<void> => {
-	await indexer.start()
-	console.log("Indexer worker started")
-
-	// Keep the process alive while indexing in background.
-	const keepAlive = setInterval(() => undefined, 60_000)
-
-	const stop = async (): Promise<void> => {
-		clearInterval(keepAlive)
-		await indexer.stop()
-		process.exit(0)
-	}
-
-	process.on("SIGINT", () => {
-		void stop()
-	})
-	process.on("SIGTERM", () => {
-		void stop()
-	})
-}
-
-start().catch(error => {
-	console.error("Indexer worker failed:", error)
-	process.exit(1)
 })
 ```
 
 Create `.env`:
 
 ```bash
-EVM_RPC_URL=https://your-rpc-url
-INDEXER_DB_PATH=./data/events.db
-INDEXER_CONTRACT_NAME=Token
-INDEXER_CONTRACT_ADDRESS=0xYourContractAddress
-INDEXER_START_BLOCK=0
-INDEXER_POLL_INTERVAL_MS=12000
-INDEXER_CONFIRMATIONS=1
-INDEXER_CHUNK_SIZE=2000
-INDEXER_PARALLEL_REQUESTS=1
-INDEXER_MAX_RETRIES=5
-INDEXER_RETRY_BASE_MS=1000
-INDEXER_RETRY_MAX_MS=30000
-INDEXER_REORG_DEPTH=20
-INDEXER_PROGRESS_ENABLED=true
-INDEXER_PROGRESS_INTERVAL_MS=3000
-INDEXER_LOG_LEVEL=info
-INDEXER_LOG_FORMAT=pretty
-INDEXER_TELEMETRY=true
+EVM_RPC_API_KEY=your-rpc-api-key
+# Optional full RPC URL override:
+# EVM_RPC_URL=https://rpc.mainnet.rootstock.io/<API_KEY>
 ```
 
 Add scripts (with `tsx` installed):

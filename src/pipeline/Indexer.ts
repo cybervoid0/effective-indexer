@@ -123,14 +123,17 @@ const indexContract = (
 								}
 
 								const chunkSize = BigInt(config.network.logs.chunkSize)
-								const lastProcessed = yield* Ref.modify(processedBlocksRef, current => {
-									const advanced = current + chunkSize
-									const next =
-										advanced > totalBackfillBlocks
-											? totalBackfillBlocks
-											: advanced
-									return [next, next] as const
-								})
+								const lastProcessed = yield* Ref.modify(
+									processedBlocksRef,
+									current => {
+										const advanced = current + chunkSize
+										const next =
+											advanced > totalBackfillBlocks
+												? totalBackfillBlocks
+												: advanced
+										return [next, next] as const
+									},
+								)
 								yield* progress.update(
 									contract.name,
 									lastProcessed,

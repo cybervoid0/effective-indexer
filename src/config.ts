@@ -6,7 +6,7 @@ export interface ContractConfig {
 	readonly name: string
 	readonly address: string
 	readonly abi: Abi
-	readonly events: readonly string[]
+	readonly events: readonly [string, ...string[]]
 	readonly startBlock?: bigint | undefined
 }
 
@@ -107,6 +107,9 @@ export interface IndexerConfig {
 	readonly logFormat?: "pretty" | "json" | "structured" | undefined
 	readonly enableTelemetry?: boolean | undefined
 }
+
+export const defineIndexerConfig = <T extends IndexerConfig>(config: T): T =>
+	config
 
 export interface ResolvedConfig {
 	readonly rpcUrl: string

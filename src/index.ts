@@ -1,3 +1,5 @@
+import { mkdir } from "node:fs/promises"
+import { dirname } from "node:path"
 import { SqliteClient } from "@effect/sql-sqlite-node"
 import { Effect, Layer, ManagedRuntime } from "effect"
 import { ConfigLive, type IndexerConfig, resolveConfig } from "./config.js"
@@ -33,7 +35,16 @@ export type {
 	RetryConfig,
 	TelemetryConfig,
 } from "./config.js"
-export { Config, ConfigLive, resolveConfig } from "./config.js"
+export {
+	Config,
+	ConfigLive,
+	defineIndexerConfig,
+	resolveConfig,
+} from "./config.js"
+export {
+	type ResolveIndexerConfigFromEnvOptions,
+	resolveIndexerConfigFromEnv,
+} from "./env-config.js"
 export type {
 	CheckpointError,
 	ConfigError,
@@ -76,6 +87,27 @@ export interface IndexerHandle {
 	readonly stop: () => Promise<void>
 	readonly query: (q?: EventQuery) => Promise<ReadonlyArray<ParsedEvent>>
 	readonly count: (q?: EventQuery) => Promise<number>
+}
+
+interface WorkerProcess {
+	on(event: NodeJS.Signals, listener: () => void): unknown
+	off(event: NodeJS.Signals, listener: () => void): unknown
+}
+
+export interface WorkerRuntime {
+	readonly process: WorkerProcess
+	readonly setInterval: typeof setInterval
+	readonly clearInterval: typeof clearInterval
+}
+
+export interface RunIndexerWorkerOptions {
+	readonly ensureDbDirectory?: boolean | undefined
+	readonly keepAliveIntervalMs?: number | undefined
+	readonly shutdownSignals?: readonly NodeJS.Signals[] | undefined
+	readonly createIndexer?:
+		| ((config: IndexerConfig) => IndexerHandle)
+		| undefined
+	readonly runtime?: WorkerRuntime | undefined
 }
 
 const buildLayers = (config: IndexerConfig) => {
@@ -199,6 +231,81 @@ export const createIndexer = (config: IndexerConfig): IndexerHandle => {
 			)
 		},
 	}
+}
+
+const defaultWorkerRuntime: WorkerRuntime = {
+	process,
+	setInterval,
+	clearInterval,
+}
+
+const resolveDbPath = (config: IndexerConfig): string =>
+	config.dbPath ?? "./indexer.db"
+
+const ensureDbDirectory = async (config: IndexerConfig): Promise<void> => {
+	const dbPath = resolveDbPath(config)
+	if (dbPath === ":memory:") {
+		return
+	}
+	await mkdir(dirname(dbPath), { recursive: true })
+}
+
+export const runIndexerWorker = async (
+	config: IndexerConfig,
+	options?: RunIndexerWorkerOptions,
+): Promise<void> => {
+	if (options?.ensureDbDirectory ?? true) {
+		await ensureDbDirectory(config)
+	}
+
+	const runtime = options?.runtime ?? defaultWorkerRuntime
+	const create = options?.createIndexer ?? createIndexer
+	const signals = options?.shutdownSignals ?? ["SIGINT", "SIGTERM"]
+	const keepAliveIntervalMs = options?.keepAliveIntervalMs ?? 60_000
+	const indexer = create(config)
+
+	await indexer.start()
+
+	await new Promise<void>((resolve, reject) => {
+		const keepAliveTimer = runtime.setInterval(
+			() => undefined,
+			keepAliveIntervalMs,
+		)
+		let stopping = false
+		const signalHandlers = new Map<NodeJS.Signals, () => void>()
+
+		const cleanup = () => {
+			runtime.clearInterval(keepAliveTimer)
+			for (const signal of signals) {
+				const handler = signalHandlers.get(signal)
+				if (handler !== undefined) {
+					runtime.process.off(signal, handler)
+				}
+			}
+		}
+
+		const handleStop = async () => {
+			if (stopping) {
+				return
+			}
+			stopping = true
+			cleanup()
+			try {
+				await indexer.stop()
+				resolve()
+			} catch (error) {
+				reject(error)
+			}
+		}
+
+		for (const signal of signals) {
+			const handler = () => {
+				void handleStop()
+			}
+			signalHandlers.set(signal, handler)
+			runtime.process.on(signal, handler)
+		}
+	})
 }
 
 export const Indexer = {

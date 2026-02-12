@@ -15,7 +15,7 @@ interface IntegrationScenario {
 	readonly startBlock: bigint
 	readonly windowSize: bigint
 	readonly maxWindows: number
-	readonly events: readonly string[]
+	readonly events: readonly [string, ...string[]]
 	readonly abi: typeof STRIF_TOKEN_ABI | typeof GOVERNOR_ABI
 }
 
