@@ -2,6 +2,8 @@
 
 Lightweight EVM smart contract event indexer built with [Effect](https://effect.website).
 
+Index EVM events to your own database in minutes — no hosted lock-in, no PhD required.
+
 Repository: [github.com/cybervoid0/effective-indexer](https://github.com/cybervoid0/effective-indexer)
 
 Indexes smart contract events into SQLite with:
