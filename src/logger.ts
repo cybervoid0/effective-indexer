@@ -1,5 +1,5 @@
-import { Layer, Logger, LogLevel } from "effect"
-import type { ResolvedConfig } from "./config.js"
+import { Effect, Layer, Logger, LogLevel } from "effect"
+import { Config } from "./config.js"
 
 const parseLogLevel = (level: string): LogLevel.LogLevel => {
 	switch (level) {
@@ -31,13 +31,18 @@ const pickLoggerLayer = (format: string): Layer.Layer<never> => {
 	}
 }
 
-export const LoggerLive = (config: ResolvedConfig): Layer.Layer<never> => {
-	const level = config.enableTelemetry
-		? parseLogLevel(config.logLevel)
-		: LogLevel.Error
-
-	return Layer.merge(
-		pickLoggerLayer(config.logFormat),
-		Logger.minimumLogLevel(level),
-	)
-}
+/**
+ * Logger layer derived from resolved Config — no sync escape hatches.
+ */
+export const LoggerLive: Layer.Layer<never, never, Config> = Layer.unwrapEffect(
+	Effect.gen(function* () {
+		const config = yield* Config
+		const level = config.enableTelemetry
+			? parseLogLevel(config.logLevel)
+			: LogLevel.Error
+		return Layer.merge(
+			pickLoggerLayer(config.logFormat),
+			Logger.minimumLogLevel(level),
+		)
+	}),
+)

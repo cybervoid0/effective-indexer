@@ -131,8 +131,7 @@ const indexContract = (
 													blockNumbers,
 													bn =>
 														Effect.gen(function* () {
-															const blockInfo =
-																yield* getBlockWithRetry(bn)
+															const blockInfo = yield* getBlockWithRetry(bn)
 															blockCache.set(bn, blockInfo)
 															yield* reorgDetector.verifyBlock(blockInfo)
 															return decoded
@@ -170,11 +169,7 @@ const indexContract = (
 								const chunkEndHash = cached
 									? cached.hash
 									: (yield* getBlockWithRetry(chunkEnd)).hash
-								yield* checkpoint.save(
-									contract.name,
-									chunkEnd,
-									chunkEndHash,
-								)
+								yield* checkpoint.save(contract.name, chunkEnd, chunkEndHash)
 
 								// Keep progress monotonic even when a chunk yields zero events.
 								const chunkSize = BigInt(config.network.logs.chunkSize)

@@ -6,13 +6,6 @@ import { ConfigError, type RpcError } from "../errors.js"
 import type { RawLog } from "../services/RpcProvider.js"
 import { RpcProvider } from "../services/RpcProvider.js"
 
-export const buildTopicFilter = (
-	abi: Abi,
-	eventNames: readonly string[],
-): readonly string[] => {
-	return Effect.runSync(buildTopicFilterEffect(abi, eventNames))
-}
-
 export const buildTopicFilterEffect = (
 	abi: Abi,
 	eventNames: readonly string[],
@@ -64,6 +57,18 @@ export const fetchLogs = (params: {
 			const config = yield* Config
 			const rpc = yield* RpcProvider
 			const chunkSize = BigInt(config.network.logs.chunkSize)
+			const { baseDelayMs, maxDelayMs } = config.network.logs.retry
+			const maxRetries = config.network.logs.maxRetries
+			const concurrency = config.network.logs.parallelRequests
+
+			const retrySchedule = Schedule.exponential(
+				Duration.millis(baseDelayMs),
+			).pipe(
+				Schedule.delayed(d =>
+					Duration.millis(Math.min(Duration.toMillis(d), maxDelayMs)),
+				),
+				Schedule.compose(Schedule.recurs(maxRetries)),
+			)
 
 			const span = params.toBlock - params.fromBlock + 1n
 			const numChunks =
@@ -81,14 +86,10 @@ export const fetchLogs = (params: {
 				return Stream.empty
 			}
 
-			const concurrency = config.network.logs.parallelRequests
-
 			return Stream.fromIterable(chunks).pipe(
 				Stream.mapEffect(
 					chunk =>
 						Effect.gen(function* () {
-							const { baseDelayMs, maxDelayMs } = config.network.logs.retry
-							const maxRetries = config.network.logs.maxRetries
 							const attempt = yield* Ref.make(0)
 							const logs = yield* rpc
 								.getLogs({
@@ -119,16 +120,7 @@ export const fetchLogs = (params: {
 											)
 										}),
 									),
-									Effect.retry(
-										Schedule.exponential(Duration.millis(baseDelayMs)).pipe(
-											Schedule.delayed(d =>
-												Duration.millis(
-													Math.min(Duration.toMillis(d), maxDelayMs),
-												),
-											),
-											Schedule.compose(Schedule.recurs(maxRetries)),
-										),
-									),
+									Effect.retry(retrySchedule),
 									Effect.tap(result =>
 										Effect.logTrace("Logs fetched").pipe(
 											Effect.annotateLogs({

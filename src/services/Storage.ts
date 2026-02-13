@@ -91,9 +91,7 @@ const buildWhereClause = (
 	]
 	const active = pairs.filter(([v]) => v !== undefined)
 	const where =
-		active.length > 0
-			? `WHERE ${active.map(([, c]) => c).join(" AND ")}`
-			: ""
+		active.length > 0 ? `WHERE ${active.map(([, c]) => c).join(" AND ")}` : ""
 	const params = active.map(([v]) => v)
 	return { where, params }
 }
@@ -203,12 +201,10 @@ export const StorageLive = Layer.effect(
 
 		const insertEvents = (events: ReadonlyArray<InsertEvent>) =>
 			Effect.gen(function* () {
-			if (events.length === 0) {
-				return
-			}
-			yield* Effect.forEach(
-				chunkEvents(events, INSERT_BATCH_SIZE),
-				batch => {
+				if (events.length === 0) {
+					return
+				}
+				yield* Effect.forEach(chunkEvents(events, INSERT_BATCH_SIZE), batch => {
 					const placeholders = batch
 						.map(() => "(?, ?, ?, ?, ?, ?, ?)")
 						.join(", ")
@@ -216,8 +212,7 @@ export const StorageLive = Layer.effect(
 						// JSON payload must be bigint-safe for EVM numeric fields.
 						const argsJson = JSON.stringify(event.args, toJsonValue)
 						const blockNum = Number(event.blockNumber)
-						const ts =
-							event.timestamp !== null ? Number(event.timestamp) : null
+						const ts = event.timestamp !== null ? Number(event.timestamp) : null
 						return [
 							event.contractName,
 							event.eventName,
@@ -233,8 +228,7 @@ export const StorageLive = Layer.effect(
             VALUES ${placeholders}`,
 						params,
 					)
-				},
-			)
+				})
 			}).pipe(Effect.mapError(wrapSqlError("insertEvents")))
 
 		const deleteEventsFrom = (blockNumber: bigint) =>
@@ -259,24 +253,17 @@ export const StorageLive = Layer.effect(
 
 		const countEvents = (query?: EventQuery) =>
 			Effect.gen(function* () {
-				if (
-					!query ||
-					(!query.contractName &&
-						!query.eventName &&
-						!query.fromBlock &&
-						!query.toBlock &&
-						!query.txHash)
-				) {
-					const rows = yield* sql<{
-						count: number
-					}>`SELECT COUNT(*) as count FROM events`
-					return rows[0]?.count ?? 0
-				}
-				const { where, params } = buildWhereClause(query)
-				const rows = yield* sql.unsafe<{ count: number }>(
-					`SELECT COUNT(*) as count FROM events ${where}`,
-					[...params],
-				)
+				const { where, params } = buildWhereClause(query ?? {})
+				// Bare COUNT(*) without WHERE is faster in SQLite.
+				const rows =
+					where === ""
+						? yield* sql<{
+								count: number
+							}>`SELECT COUNT(*) as count FROM events`
+						: yield* sql.unsafe<{ count: number }>(
+								`SELECT COUNT(*) as count FROM events ${where}`,
+								[...params],
+							)
 				return rows[0]?.count ?? 0
 			}).pipe(Effect.mapError(wrapSqlError("countEvents")))
 
@@ -325,7 +312,7 @@ export const StorageLive = Layer.effect(
 						lastBlock: BigInt(row.last_block),
 						lastBlockHash: row.last_block_hash,
 						updatedAt: row.updated_at,
-					} as Checkpoint
+					} satisfies Checkpoint
 				}),
 				Effect.mapError(wrapSqlError("getCheckpoint")),
 			)

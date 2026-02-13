@@ -4,7 +4,7 @@ import { GOVERNOR_ABI, STRIF_TOKEN_ABI } from "@test/fixtures/abi"
 import { Chunk, Effect, Layer, Stream } from "effect"
 import { describe, expect, it } from "vitest"
 import { type Config, ConfigLive } from "@/config"
-import { buildTopicFilter, fetchLogs } from "@/pipeline/LogFetcher"
+import { buildTopicFilterEffect, fetchLogs } from "@/pipeline/LogFetcher"
 import { EventDecoder, EventDecoderLive } from "@/services/EventDecoder"
 import { RpcProvider, RpcProviderLive } from "@/services/RpcProvider"
 
@@ -134,7 +134,7 @@ const findWindowWithLogs = (
 					),
 			),
 		)
-		const topics = buildTopicFilter(scenario.abi, scenario.events)
+		const topics = yield* buildTopicFilterEffect(scenario.abi, scenario.events)
 
 		for (let index = 0; index < scenario.maxWindows; index += 1) {
 			const fromBlock =
@@ -185,7 +185,7 @@ describeIntegration("RSK integration (real contracts)", () => {
 					const foundWindow = yield* findWindowWithLogs(scenario)
 					const chunks = yield* fetchLogs({
 						address: scenario.contractAddress,
-						topics: buildTopicFilter(scenario.abi, scenario.events),
+						topics: yield* buildTopicFilterEffect(scenario.abi, scenario.events),
 						fromBlock: foundWindow.fromBlock,
 						toBlock: foundWindow.toBlock,
 					}).pipe(Stream.runCollect, Effect.map(Chunk.toReadonlyArray))

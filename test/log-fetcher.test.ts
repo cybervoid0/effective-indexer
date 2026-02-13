@@ -3,30 +3,12 @@ import { describe, expect, it } from "vitest"
 import { ConfigLive } from "../src/config.js"
 import { RpcError } from "../src/errors.js"
 import {
-	buildTopicFilter,
 	buildTopicFilterEffect,
 	fetchLogs,
 } from "../src/pipeline/LogFetcher.js"
 import type { RawLog } from "../src/services/RpcProvider.js"
 import { RpcProvider } from "../src/services/RpcProvider.js"
 import { ERC20_ABI } from "./fixtures/abi.js"
-
-describe("buildTopicFilter", () => {
-	it("builds topic filter for Transfer event", () => {
-		const topics = buildTopicFilter(ERC20_ABI, ["Transfer"])
-		expect(topics).toHaveLength(1)
-		expect(topics[0]).toMatch(/^0x[0-9a-f]{64}$/)
-	})
-
-	it("builds topic filter for multiple events", () => {
-		const topics = buildTopicFilter(ERC20_ABI, ["Transfer", "Approval"])
-		expect(topics).toHaveLength(2)
-	})
-
-	it("throws for unknown event", () => {
-		expect(() => buildTopicFilter(ERC20_ABI, ["NonExistent"])).toThrow()
-	})
-})
 
 describe("buildTopicFilterEffect", () => {
 	it("returns topics for valid event names", async () => {

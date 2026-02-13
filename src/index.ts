@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises"
 import { dirname } from "node:path"
 import { SqliteClient } from "@effect/sql-sqlite-node"
 import { Duration, Effect, Layer, ManagedRuntime } from "effect"
-import { ConfigLive, type IndexerConfig, resolveConfig } from "./config.js"
+import { ConfigLive, type IndexerConfig } from "./config.js"
 import { LoggerLive } from "./logger.js"
 import { BlockCursorLive } from "./pipeline/BlockCursor.js"
 import { runIndexer } from "./pipeline/Indexer.js"
@@ -155,12 +155,10 @@ export const createWebhookNotifier =
 	}
 
 const buildLayers = (config: IndexerConfig) => {
-	const resolved = resolveConfig(config)
 	const ConfigLayer = ConfigLive(config)
 	const SqliteLayer = SqliteClient.layer({
 		filename: config.dbPath ?? "./indexer.db",
 	})
-	const LoggerLayer = LoggerLive(resolved)
 
 	// Foundation: resolved config + sqlite client.
 	const FoundationLayer = Layer.merge(ConfigLayer, SqliteLayer)
@@ -199,6 +197,9 @@ const buildLayers = (config: IndexerConfig) => {
 	const ProgressRendererLayer = ProgressRendererLive.pipe(
 		Layer.provide(Layer.merge(ConfigLayer, ProgressReporterLayer)),
 	)
+
+	// Logger derives log level and format from resolved Config.
+	const LoggerLayer = LoggerLive.pipe(Layer.provide(ConfigLayer))
 
 	return Layer.mergeAll(
 		ConfigLayer,
@@ -358,29 +359,24 @@ export const runIndexerWorker = async (
 			2,
 	}
 
-	const signalHandlers = new Map<NodeJS.Signals, () => void>()
 	let stopRequested = false
 	let activeIndexer: IndexerHandle | null = null
 
-	const stopSignalPromise = new Promise<void>(resolve => {
-		for (const signal of signals) {
-			const handler = () => {
-				stopRequested = true
-				resolve()
-			}
-			signalHandlers.set(signal, handler)
-			runtime.process.on(signal, handler)
-		}
+	let resolveStopSignal: (() => void) | undefined
+	const stopSignalPromise = new Promise<void>(r => {
+		resolveStopSignal = r
 	})
-
-	const cleanup = () => {
-		for (const signal of signals) {
-			const handler = signalHandlers.get(signal)
-			if (handler !== undefined) {
-				runtime.process.off(signal, handler)
-			}
-		}
+	const requestStop = () => {
+		stopRequested = true
+		resolveStopSignal?.()
 	}
+	signals.forEach(signal => {
+		runtime.process.on(signal, requestStop)
+	})
+	const cleanup = () =>
+		signals.forEach(signal => {
+			runtime.process.off(signal, requestStop)
+		})
 
 	const stopActiveIndexer = async () => {
 		if (activeIndexer !== null) {

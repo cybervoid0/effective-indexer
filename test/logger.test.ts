@@ -105,13 +105,13 @@ describe("Logger", () => {
 	describe("LoggerLive level filtering", () => {
 		it("filters logs below configured level", async () => {
 			const { logs, logger } = makeCaptureLogger()
-			const resolved = resolveConfig({
+			const ConfLayer = ConfigLive({
 				...minimalConfig,
 				logLevel: "warning",
 			})
 
-			const TestLayer = Layer.merge(
-				LoggerLive(resolved),
+			const TestLayer = Layer.mergeAll(
+				LoggerLive.pipe(Layer.provide(ConfLayer)),
 				Logger.replace(Logger.defaultLogger, logger),
 			)
 
@@ -133,13 +133,13 @@ describe("Logger", () => {
 	describe("enableTelemetry=false suppression", () => {
 		it("only allows error-level logs when telemetry is disabled", async () => {
 			const { logs, logger } = makeCaptureLogger()
-			const resolved = resolveConfig({
+			const ConfLayer = ConfigLive({
 				...minimalConfig,
 				enableTelemetry: false,
 			})
 
-			const TestLayer = Layer.merge(
-				LoggerLive(resolved),
+			const TestLayer = Layer.mergeAll(
+				LoggerLive.pipe(Layer.provide(ConfLayer)),
 				Logger.replace(Logger.defaultLogger, logger),
 			)
 
@@ -257,11 +257,11 @@ describe("Logger", () => {
 
 	describe("JSON format", () => {
 		it("does not crash with json logFormat", async () => {
-			const resolved = resolveConfig({
+			const ConfLayer = ConfigLive({
 				...minimalConfig,
 				logFormat: "json",
 			})
-			const LogLayer = LoggerLive(resolved)
+			const LogLayer = LoggerLive.pipe(Layer.provide(ConfLayer))
 
 			const program = Effect.log("hello json")
 
@@ -270,11 +270,11 @@ describe("Logger", () => {
 		})
 
 		it("does not crash with structured logFormat", async () => {
-			const resolved = resolveConfig({
+			const ConfLayer = ConfigLive({
 				...minimalConfig,
 				logFormat: "structured",
 			})
-			const LogLayer = LoggerLive(resolved)
+			const LogLayer = LoggerLive.pipe(Layer.provide(ConfLayer))
 
 			const program = Effect.log("hello structured")
 
