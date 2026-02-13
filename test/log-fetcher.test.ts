@@ -207,7 +207,7 @@ describe("fetchLogs", () => {
 		)
 
 		expect(result).toHaveLength(5)
-		const outputOrder = result.map(chunk => chunk[0]?.blockNumber ?? -1n)
+		const outputOrder = result.map(chunk => chunk.logs[0]?.blockNumber ?? -1n)
 		expect(outputOrder).toEqual([0n, 100n, 200n, 300n, 400n])
 	})
 

@@ -28,7 +28,7 @@ export const BlockCursorLive = Layer.effect(
 		const pollOnce = Effect.gen(function* () {
 			const current = yield* rpc.getBlockNumber
 			const confirmations = BigInt(config.network.polling.confirmations)
-			const confirmed = current - confirmations
+			const confirmed = current > confirmations ? current - confirmations : 0n
 			const prev = yield* Ref.get(lastSeen)
 			const isInitialized = yield* Ref.get(initialized)
 
@@ -49,10 +49,11 @@ export const BlockCursorLive = Layer.effect(
 				return [] as ReadonlyArray<bigint>
 			}
 
-			const blocks: bigint[] = []
-			for (let block = prev + 1n; block <= confirmed; block += 1n) {
-				blocks.push(block)
-			}
+			const count = Number(confirmed - prev)
+			const blocks = Array.from(
+				{ length: count },
+				(_, i) => prev + 1n + BigInt(i),
+			)
 
 			yield* Ref.set(lastSeen, confirmed)
 			yield* Effect.logTrace("Blocks emitted").pipe(

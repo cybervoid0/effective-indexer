@@ -10,15 +10,12 @@ export interface ResolveIndexerConfigFromEnvOptions {
 // Effect Config provider expects a flat map of string values.
 const toConfigMap = (
 	env: Readonly<Record<string, string | undefined>>,
-): Map<string, string> => {
-	const map = new Map<string, string>()
-	for (const [key, value] of Object.entries(env)) {
-		if (typeof value === "string") {
-			map.set(key, value)
-		}
-	}
-	return map
-}
+): Map<string, string> =>
+	new Map(
+		Object.entries(env).filter(
+			(entry): entry is [string, string] => typeof entry[1] === "string",
+		),
+	)
 
 const getProvider = (
 	env?: Readonly<Record<string, string | undefined>>,

@@ -8,7 +8,11 @@ import { ProgressReporter } from "../services/ProgressReporter.js"
 import { RpcProvider } from "../services/RpcProvider.js"
 import { Storage } from "../services/Storage.js"
 import { BlockCursor } from "./BlockCursor.js"
-import { buildTopicFilterEffect, fetchLogs } from "./LogFetcher.js"
+import {
+	buildTopicFilterEffect,
+	fetchLogs,
+	type LogChunk,
+} from "./LogFetcher.js"
 import { ReorgDetector } from "./ReorgDetector.js"
 
 type IndexerDeps =
@@ -98,56 +102,79 @@ const indexContract = (
 						fromBlock: startBlock,
 						toBlock: currentHead,
 					}).pipe(
-						Stream.mapEffect(rawLogs =>
+						Stream.mapEffect((chunk: LogChunk) =>
 							Effect.gen(function* () {
-								if (rawLogs.length === 0) return [] as DecodedEvent[]
+								const { logs: rawLogs, chunkEnd } = chunk
+								// Cache block info fetched during event enrichment
+								// so we can reuse it for checkpoint without an extra RPC call.
+								const blockCache = new Map<
+									bigint,
+									{ hash: string; timestamp: bigint }
+								>()
 
-								const decoded = yield* decoder.decodeBatch(
-									contract.name,
-									contract.abi,
-									rawLogs,
-								)
+								const withTimestamp =
+									rawLogs.length > 0
+										? yield* Effect.gen(function* () {
+												const decoded = yield* decoder.decodeBatch(
+													contract.name,
+													contract.abi,
+													rawLogs,
+												)
 
-								// Enrich logs with block metadata and reorg validation.
-								const blockNumbers = [
-									...new Set(decoded.map(d => d.blockNumber)),
-								]
-								const withTimestamp: DecodedEvent[] = []
+												const blockNumbers = [
+													...new Set(decoded.map(d => d.blockNumber)),
+												]
 
-								for (const bn of blockNumbers) {
-									const blockInfo = yield* getBlockWithRetry(bn)
-									yield* reorgDetector.verifyBlock(blockInfo)
+												// Fetch block info sequentially — reorg verification
+												// depends on parent hash chain order.
+												const enriched = yield* Effect.forEach(
+													blockNumbers,
+													bn =>
+														Effect.gen(function* () {
+															const blockInfo =
+																yield* getBlockWithRetry(bn)
+															blockCache.set(bn, blockInfo)
+															yield* reorgDetector.verifyBlock(blockInfo)
+															return decoded
+																.filter(e => e.blockNumber === bn)
+																.map(e => ({
+																	...e,
+																	timestamp: blockInfo.timestamp,
+																}))
+														}),
+													{ concurrency: 1 },
+												)
 
-									for (const event of decoded) {
-										if (event.blockNumber === bn) {
-											withTimestamp.push({
-												...event,
-												timestamp: blockInfo.timestamp,
+												const events = enriched.flat()
+
+												yield* storage.insertEvents(
+													events.map(e => ({
+														contractName: e.contractName,
+														eventName: e.eventName,
+														blockNumber: e.blockNumber,
+														txHash: e.txHash,
+														logIndex: e.logIndex,
+														timestamp: e.timestamp,
+														args: e.args,
+													})),
+												)
+
+												return events
 											})
-										}
-									}
-								}
+										: ([] as DecodedEvent[])
 
-								yield* storage.insertEvents(
-									withTimestamp.map(e => ({
-										contractName: e.contractName,
-										eventName: e.eventName,
-										blockNumber: e.blockNumber,
-										txHash: e.txHash,
-										logIndex: e.logIndex,
-										timestamp: e.timestamp,
-										args: e.args,
-									})),
+								// Always save checkpoint at chunk boundary so empty chunks
+								// are not re-fetched on restart. Reuse cached block info
+								// when chunkEnd was already fetched during event enrichment.
+								const cached = blockCache.get(chunkEnd)
+								const chunkEndHash = cached
+									? cached.hash
+									: (yield* getBlockWithRetry(chunkEnd)).hash
+								yield* checkpoint.save(
+									contract.name,
+									chunkEnd,
+									chunkEndHash,
 								)
-
-								const lastBlock = withTimestamp[withTimestamp.length - 1]
-								if (lastBlock) {
-									yield* checkpoint.save(
-										contract.name,
-										lastBlock.blockNumber,
-										lastBlock.blockHash,
-									)
-								}
 
 								// Keep progress monotonic even when a chunk yields zero events.
 								const chunkSize = BigInt(config.network.logs.chunkSize)
@@ -172,9 +199,7 @@ const indexContract = (
 								yield* Effect.logDebug("Chunk indexed").pipe(
 									Effect.annotateLogs({
 										events: withTimestamp.length.toString(),
-										checkpoint: lastBlock
-											? lastBlock.blockNumber.toString()
-											: "none",
+										checkpoint: chunkEnd.toString(),
 									}),
 								)
 

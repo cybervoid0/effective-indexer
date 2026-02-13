@@ -72,6 +72,32 @@ const wrapSqlError = (operation: string) => (e: SqlError) =>
 		cause: e,
 	})
 
+/** Build WHERE clause and params from an EventQuery. */
+const buildWhereClause = (
+	query: EventQuery,
+): { readonly where: string; readonly params: readonly unknown[] } => {
+	const pairs: ReadonlyArray<[unknown, string]> = [
+		[query.contractName, "contract_name = ?"],
+		[query.eventName, "event_name = ?"],
+		[
+			query.fromBlock !== undefined ? Number(query.fromBlock) : undefined,
+			"block_number >= ?",
+		],
+		[
+			query.toBlock !== undefined ? Number(query.toBlock) : undefined,
+			"block_number <= ?",
+		],
+		[query.txHash, "tx_hash = ?"],
+	]
+	const active = pairs.filter(([v]) => v !== undefined)
+	const where =
+		active.length > 0
+			? `WHERE ${active.map(([, c]) => c).join(" AND ")}`
+			: ""
+	const params = active.map(([v]) => v)
+	return { where, params }
+}
+
 const toJsonValue = (_key: string, value: unknown): unknown =>
 	typeof value === "bigint" ? value.toString() : value
 
@@ -80,13 +106,10 @@ const INSERT_BATCH_SIZE = 250
 const chunkEvents = (
 	events: ReadonlyArray<InsertEvent>,
 	size: number,
-): ReadonlyArray<ReadonlyArray<InsertEvent>> => {
-	const chunks: Array<ReadonlyArray<InsertEvent>> = []
-	for (let i = 0; i < events.length; i += size) {
-		chunks.push(events.slice(i, i + size))
-	}
-	return chunks
-}
+): ReadonlyArray<ReadonlyArray<InsertEvent>> =>
+	Array.from({ length: Math.ceil(events.length / size) }, (_, i) =>
+		events.slice(i * size, (i + 1) * size),
+	)
 
 /**
  * Persistence boundary for events, checkpoints, and block hashes.
@@ -140,6 +163,9 @@ export const StorageLive = Layer.effect(
 		const sql = yield* SqlClient.SqlClient
 
 		const initialize = Effect.gen(function* () {
+			// WAL mode allows concurrent reads while the worker writes,
+			// and provides better durability on unexpected process kill.
+			yield* sql`PRAGMA journal_mode=WAL`
 			// Keep schema bootstrap idempotent for repeated worker restarts.
 			yield* sql`
         CREATE TABLE IF NOT EXISTS events (
@@ -177,10 +203,12 @@ export const StorageLive = Layer.effect(
 
 		const insertEvents = (events: ReadonlyArray<InsertEvent>) =>
 			Effect.gen(function* () {
-				if (events.length === 0) {
-					return
-				}
-				for (const batch of chunkEvents(events, INSERT_BATCH_SIZE)) {
+			if (events.length === 0) {
+				return
+			}
+			yield* Effect.forEach(
+				chunkEvents(events, INSERT_BATCH_SIZE),
+				batch => {
 					const placeholders = batch
 						.map(() => "(?, ?, ?, ?, ?, ?, ?)")
 						.join(", ")
@@ -188,7 +216,8 @@ export const StorageLive = Layer.effect(
 						// JSON payload must be bigint-safe for EVM numeric fields.
 						const argsJson = JSON.stringify(event.args, toJsonValue)
 						const blockNum = Number(event.blockNumber)
-						const ts = event.timestamp !== null ? Number(event.timestamp) : null
+						const ts =
+							event.timestamp !== null ? Number(event.timestamp) : null
 						return [
 							event.contractName,
 							event.eventName,
@@ -199,12 +228,13 @@ export const StorageLive = Layer.effect(
 							argsJson,
 						]
 					})
-					yield* sql.unsafe(
+					return sql.unsafe(
 						`INSERT OR IGNORE INTO events (contract_name, event_name, block_number, tx_hash, log_index, timestamp, args)
             VALUES ${placeholders}`,
 						params,
 					)
-				}
+				},
+			)
 			}).pipe(Effect.mapError(wrapSqlError("insertEvents")))
 
 		const deleteEventsFrom = (blockNumber: bigint) =>
@@ -215,35 +245,10 @@ export const StorageLive = Layer.effect(
 
 		const queryEvents = (query: EventQuery) =>
 			Effect.gen(function* () {
-				const conditions: string[] = []
-				const params: unknown[] = []
-
-				if (query.contractName !== undefined) {
-					conditions.push("contract_name = ?")
-					params.push(query.contractName)
-				}
-				if (query.eventName !== undefined) {
-					conditions.push("event_name = ?")
-					params.push(query.eventName)
-				}
-				if (query.fromBlock !== undefined) {
-					conditions.push("block_number >= ?")
-					params.push(Number(query.fromBlock))
-				}
-				if (query.toBlock !== undefined) {
-					conditions.push("block_number <= ?")
-					params.push(Number(query.toBlock))
-				}
-				if (query.txHash !== undefined) {
-					conditions.push("tx_hash = ?")
-					params.push(query.txHash)
-				}
-
-				const where =
-					conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
+				const { where, params } = buildWhereClause(query)
 				const order = query.order === "desc" ? "DESC" : "ASC"
-				const limit = query.limit ?? 1000
-				const offset = query.offset ?? 0
+				const limit = Math.max(1, Math.min(query.limit ?? 1000, 10_000))
+				const offset = Math.max(0, query.offset ?? 0)
 
 				const rows = yield* sql.unsafe<StoredEvent>(
 					`SELECT * FROM events ${where} ORDER BY block_number ${order}, log_index ASC LIMIT ? OFFSET ?`,
@@ -267,32 +272,10 @@ export const StorageLive = Layer.effect(
 					}>`SELECT COUNT(*) as count FROM events`
 					return rows[0]?.count ?? 0
 				}
-				const conditions: string[] = []
-				const params: unknown[] = []
-				if (query.contractName !== undefined) {
-					conditions.push("contract_name = ?")
-					params.push(query.contractName)
-				}
-				if (query.eventName !== undefined) {
-					conditions.push("event_name = ?")
-					params.push(query.eventName)
-				}
-				if (query.fromBlock !== undefined) {
-					conditions.push("block_number >= ?")
-					params.push(Number(query.fromBlock))
-				}
-				if (query.toBlock !== undefined) {
-					conditions.push("block_number <= ?")
-					params.push(Number(query.toBlock))
-				}
-				if (query.txHash !== undefined) {
-					conditions.push("tx_hash = ?")
-					params.push(query.txHash)
-				}
-				const where = `WHERE ${conditions.join(" AND ")}`
+				const { where, params } = buildWhereClause(query)
 				const rows = yield* sql.unsafe<{ count: number }>(
 					`SELECT COUNT(*) as count FROM events ${where}`,
-					params,
+					[...params],
 				)
 				return rows[0]?.count ?? 0
 			}).pipe(Effect.mapError(wrapSqlError("countEvents")))

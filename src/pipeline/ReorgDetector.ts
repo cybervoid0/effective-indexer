@@ -72,15 +72,13 @@ export const ReorgDetectorLive = Layer.effect(
 					}
 				}
 
-				yield* Ref.update(blockHashBuffer, buf => {
-					const newBuf = new Map(buf)
-					newBuf.set(block.number, block.hash)
-					const minBlock = block.number - BigInt(reorgDepth)
-					for (const key of newBuf.keys()) {
-						if (key < minBlock) newBuf.delete(key)
-					}
-					return newBuf
-				})
+			yield* Ref.update(blockHashBuffer, buf => {
+				const minBlock = block.number - BigInt(reorgDepth)
+				const entries = Array.from(buf.entries()).filter(
+					([k]) => k >= minBlock,
+				)
+				return new Map([...entries, [block.number, block.hash]])
+			})
 
 				yield* storage.insertBlockHash(block.number, block.hash)
 			})

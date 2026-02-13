@@ -129,12 +129,22 @@ export const RpcProviderLive = Layer.effect(
 						cause: e,
 					}),
 			}).pipe(
-				Effect.map(block => ({
-					number: block.number,
-					hash: block.hash,
-					parentHash: block.parentHash,
-					timestamp: block.timestamp,
-				})),
+				Effect.flatMap(block => {
+					if (!block) {
+						return Effect.fail(
+							new RpcError({
+								reason: `Block ${blockNumber} not found`,
+								method: "eth_getBlockByNumber",
+							}),
+						)
+					}
+					return Effect.succeed({
+						number: block.number,
+						hash: block.hash,
+						parentHash: block.parentHash,
+						timestamp: block.timestamp,
+					})
+				}),
 			)
 
 		return { getBlockNumber, getLogs, getBlock }

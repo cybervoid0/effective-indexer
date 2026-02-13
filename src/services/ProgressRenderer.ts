@@ -100,11 +100,9 @@ export const ProgressRendererLive: Layer.Layer<
 					return pc.default.cyan(raw)
 				})
 				logUpdate(lines.join("\n"))
-			} else {
-				for (const s of snapshots) {
-					yield* Effect.log(buildLine(s, config))
-				}
-			}
+		} else {
+			yield* Effect.forEach(snapshots, s => Effect.log(buildLine(s, config)))
+		}
 		})
 
 		return {

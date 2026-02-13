@@ -44,6 +44,12 @@ export const buildTopicFilterEffect = (
 		}),
 	)
 
+export interface LogChunk {
+	readonly logs: ReadonlyArray<RawLog>
+	/** Upper block boundary of the chunk (inclusive). */
+	readonly chunkEnd: bigint
+}
+
 /**
  * Fetches historical logs in deterministic chunk order with bounded concurrency.
  */
@@ -52,23 +58,24 @@ export const fetchLogs = (params: {
 	readonly topics: readonly string[]
 	readonly fromBlock: bigint
 	readonly toBlock: bigint
-}): Stream.Stream<ReadonlyArray<RawLog>, RpcError, RpcProvider | Config> =>
+}): Stream.Stream<LogChunk, RpcError, RpcProvider | Config> =>
 	Stream.unwrap(
 		Effect.gen(function* () {
 			const config = yield* Config
 			const rpc = yield* RpcProvider
 			const chunkSize = BigInt(config.network.logs.chunkSize)
 
-			const chunks: Array<{ from: bigint; to: bigint }> = []
-			let cursor = params.fromBlock
-			while (cursor <= params.toBlock) {
-				const end =
-					cursor + chunkSize - 1n > params.toBlock
+			const span = params.toBlock - params.fromBlock + 1n
+			const numChunks =
+				span > 0n ? Number((span + chunkSize - 1n) / chunkSize) : 0
+			const chunks = Array.from({ length: numChunks }, (_, i) => {
+				const from = params.fromBlock + BigInt(i) * chunkSize
+				const to =
+					from + chunkSize - 1n > params.toBlock
 						? params.toBlock
-						: cursor + chunkSize - 1n
-				chunks.push({ from: cursor, to: end })
-				cursor = end + 1n
-			}
+						: from + chunkSize - 1n
+				return { from, to }
+			})
 
 			if (chunks.length === 0) {
 				return Stream.empty
@@ -83,7 +90,7 @@ export const fetchLogs = (params: {
 							const { baseDelayMs, maxDelayMs } = config.network.logs.retry
 							const maxRetries = config.network.logs.maxRetries
 							const attempt = yield* Ref.make(0)
-							return yield* rpc
+							const logs = yield* rpc
 								.getLogs({
 									address: params.address,
 									topics: [params.topics],
@@ -122,16 +129,17 @@ export const fetchLogs = (params: {
 											Schedule.compose(Schedule.recurs(maxRetries)),
 										),
 									),
-									Effect.tap(logs =>
+									Effect.tap(result =>
 										Effect.logTrace("Logs fetched").pipe(
 											Effect.annotateLogs({
 												from: chunk.from.toString(),
 												to: chunk.to.toString(),
-												count: logs.length.toString(),
+												count: result.length.toString(),
 											}),
 										),
 									),
 								)
+							return { logs, chunkEnd: chunk.to } satisfies LogChunk
 						}),
 					{ concurrency },
 				),

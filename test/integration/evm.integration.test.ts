@@ -194,7 +194,7 @@ describeIntegration("EVM integration (real contracts)", () => {
 						toBlock: foundWindow.toBlock,
 					}).pipe(Stream.runCollect, Effect.map(Chunk.toReadonlyArray))
 
-					const logs = chunks.flat()
+					const logs = chunks.flatMap(c => c.logs)
 					const decoded = yield* decoder.decodeBatch(
 						scenario.name,
 						scenario.abi,
