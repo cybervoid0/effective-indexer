@@ -42,6 +42,23 @@ export interface TelemetryConfig {
 	readonly progress?: ProgressConfig | undefined
 }
 
+export interface WorkerRecoveryConfig {
+	readonly enabled?: boolean | undefined
+	readonly maxRecoveryDurationMs?: number | undefined
+	readonly initialRetryDelayMs?: number | undefined
+	readonly maxRetryDelayMs?: number | undefined
+	readonly backoffFactor?: number | undefined
+}
+
+export interface WorkerAlertConfig {
+	readonly webhookUrl?: string | undefined
+}
+
+export interface WorkerConfig {
+	readonly recovery?: WorkerRecoveryConfig | undefined
+	readonly alert?: WorkerAlertConfig | undefined
+}
+
 export interface NetworkConfig {
 	readonly polling?: PollingConfig | undefined
 	readonly logs?: LogsConfig | undefined
@@ -94,6 +111,7 @@ export interface IndexerConfig {
 	readonly contracts: readonly [ContractConfig, ...ContractConfig[]]
 	readonly network?: NetworkConfig | undefined
 	readonly telemetry?: TelemetryConfig | undefined
+	readonly worker?: WorkerConfig | undefined
 
 	// Logging (not network-specific)
 	readonly logLevel?:

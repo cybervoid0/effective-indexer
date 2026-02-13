@@ -1,4 +1,4 @@
-import { Effect, Ref, Stream } from "effect"
+import { Duration, Effect, Ref, Schedule, Stream } from "effect"
 import { Config, type ContractConfig } from "../config.js"
 import type { IndexerError } from "../errors.js"
 import { CheckpointManager } from "../services/Checkpoint.js"
@@ -37,6 +37,29 @@ const indexContract = (
 			const blockCursor = yield* BlockCursor
 			const progress = yield* ProgressReporter
 			const renderer = yield* ProgressRenderer
+			const { baseDelayMs, maxDelayMs } = config.network.logs.retry
+			const maxRetries = config.network.logs.maxRetries
+			const blockRetrySchedule = Schedule.exponential(
+				Duration.millis(baseDelayMs),
+			).pipe(
+				Schedule.delayed(duration =>
+					Duration.millis(Math.min(Duration.toMillis(duration), maxDelayMs)),
+				),
+				Schedule.compose(Schedule.recurs(maxRetries)),
+			)
+			const getBlockWithRetry = (blockNumber: bigint) =>
+				rpc.getBlock(blockNumber).pipe(
+					Effect.tapError(err =>
+						Effect.logDebug("RPC getBlock failed, retrying").pipe(
+							Effect.annotateLogs({
+								block: blockNumber.toString(),
+								reason: err.reason,
+								method: "eth_getBlockByNumber",
+							}),
+						),
+					),
+					Effect.retry(blockRetrySchedule),
+				)
 
 			const startBlock = yield* checkpoint.getStartBlock(
 				contract.name,
@@ -92,7 +115,7 @@ const indexContract = (
 								const withTimestamp: DecodedEvent[] = []
 
 								for (const bn of blockNumbers) {
-									const blockInfo = yield* rpc.getBlock(bn)
+									const blockInfo = yield* getBlockWithRetry(bn)
 									yield* reorgDetector.verifyBlock(blockInfo)
 
 									for (const event of decoded) {
@@ -167,7 +190,7 @@ const indexContract = (
 				blockCursor.liveBlocks.pipe(
 					Stream.mapEffect(blockNumber =>
 						Effect.gen(function* () {
-							const blockInfo = yield* rpc.getBlock(blockNumber)
+							const blockInfo = yield* getBlockWithRetry(blockNumber)
 
 							const reorgResult = yield* Effect.either(
 								reorgDetector.verifyBlock(blockInfo),

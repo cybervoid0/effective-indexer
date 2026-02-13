@@ -489,11 +489,3 @@ npm run typecheck
 npm run test
 npm run check
 ```
-
-### Live Integration Tests
-
-Integration tests read RPC URLs from `.env` (mainnet) and `.env.test` (testnet) using `EVM_RPC_URL`.
-
-```bash
-npm run test:integration
-```

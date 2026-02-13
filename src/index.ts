@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises"
 import { dirname } from "node:path"
 import { SqliteClient } from "@effect/sql-sqlite-node"
-import { Effect, Layer, ManagedRuntime } from "effect"
+import { Duration, Effect, Layer, ManagedRuntime } from "effect"
 import { ConfigLive, type IndexerConfig, resolveConfig } from "./config.js"
 import { LoggerLive } from "./logger.js"
 import { BlockCursorLive } from "./pipeline/BlockCursor.js"
@@ -34,6 +34,9 @@ export type {
 	ResolvedTelemetryConfig,
 	RetryConfig,
 	TelemetryConfig,
+	WorkerAlertConfig,
+	WorkerConfig,
+	WorkerRecoveryConfig,
 } from "./config.js"
 export {
 	Config,
@@ -86,6 +89,7 @@ export { Storage, StorageLive } from "./services/Storage.js"
 export interface IndexerHandle {
 	readonly start: () => Promise<void>
 	readonly stop: () => Promise<void>
+	readonly waitForExit: () => Promise<void>
 	readonly query: (q?: EventQuery) => Promise<ReadonlyArray<ParsedEvent>>
 	readonly count: (q?: EventQuery) => Promise<number>
 }
@@ -97,19 +101,58 @@ interface WorkerProcess {
 
 export interface WorkerRuntime {
 	readonly process: WorkerProcess
-	readonly setInterval: typeof setInterval
-	readonly clearInterval: typeof clearInterval
 }
 
 export interface RunIndexerWorkerOptions {
 	readonly ensureDbDirectory?: boolean | undefined
-	readonly keepAliveIntervalMs?: number | undefined
 	readonly shutdownSignals?: readonly NodeJS.Signals[] | undefined
+	readonly recovery?:
+		| {
+				readonly enabled?: boolean | undefined
+				readonly maxRecoveryDurationMs?: number | undefined
+				readonly initialRetryDelayMs?: number | undefined
+				readonly maxRetryDelayMs?: number | undefined
+				readonly backoffFactor?: number | undefined
+		  }
+		| undefined
+	readonly onRecoveryFailure?:
+		| ((notification: WorkerFailureNotification) => Promise<void> | void)
+		| undefined
 	readonly createIndexer?:
 		| ((config: IndexerConfig) => IndexerHandle)
 		| undefined
 	readonly runtime?: WorkerRuntime | undefined
 }
+
+export interface WorkerFailureNotification {
+	readonly attempts: number
+	readonly recoveryDurationMs: number
+	readonly error: unknown
+	readonly timestamp: string
+}
+
+export const createWebhookNotifier =
+	(
+		webhookUrl: string,
+		init?: {
+			readonly headers?: Readonly<Record<string, string>> | undefined
+		},
+	) =>
+	async (notification: WorkerFailureNotification): Promise<void> => {
+		const response = await fetch(webhookUrl, {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				...(init?.headers ?? {}),
+			},
+			body: JSON.stringify(notification),
+		})
+		if (!response.ok) {
+			throw new Error(
+				`Notification webhook failed with status ${response.status}`,
+			)
+		}
+	}
 
 const buildLayers = (config: IndexerConfig) => {
 	const resolved = resolveConfig(config)
@@ -231,6 +274,13 @@ export const createIndexer = (config: IndexerConfig): IndexerHandle => {
 			}
 		},
 
+		waitForExit: async () => {
+			if (runningPromise === null) {
+				return
+			}
+			await runningPromise
+		},
+
 		query: async q => {
 			return runtime.runPromise(
 				Effect.gen(function* () {
@@ -253,8 +303,6 @@ export const createIndexer = (config: IndexerConfig): IndexerHandle => {
 
 const defaultWorkerRuntime: WorkerRuntime = {
 	process,
-	setInterval,
-	clearInterval,
 }
 
 const resolveDbPath = (config: IndexerConfig): string =>
@@ -282,52 +330,122 @@ export const runIndexerWorker = async (
 	const runtime = options?.runtime ?? defaultWorkerRuntime
 	const create = options?.createIndexer ?? createIndexer
 	const signals = options?.shutdownSignals ?? ["SIGINT", "SIGTERM"]
-	const keepAliveIntervalMs = options?.keepAliveIntervalMs ?? 60_000
-	const indexer = create(config)
+	const webhookUrl = config.worker?.alert?.webhookUrl
+	const configNotifier =
+		webhookUrl && webhookUrl.length > 0
+			? createWebhookNotifier(webhookUrl)
+			: null
+	const onRecoveryFailure =
+		options?.onRecoveryFailure ?? configNotifier ?? undefined
+	const recovery = {
+		enabled:
+			options?.recovery?.enabled ?? config.worker?.recovery?.enabled ?? true,
+		maxRecoveryDurationMs:
+			options?.recovery?.maxRecoveryDurationMs ??
+			config.worker?.recovery?.maxRecoveryDurationMs ??
+			15 * 60 * 1000,
+		initialRetryDelayMs:
+			options?.recovery?.initialRetryDelayMs ??
+			config.worker?.recovery?.initialRetryDelayMs ??
+			1000,
+		maxRetryDelayMs:
+			options?.recovery?.maxRetryDelayMs ??
+			config.worker?.recovery?.maxRetryDelayMs ??
+			30_000,
+		backoffFactor:
+			options?.recovery?.backoffFactor ??
+			config.worker?.recovery?.backoffFactor ??
+			2,
+	}
 
-	await indexer.start()
+	const signalHandlers = new Map<NodeJS.Signals, () => void>()
+	let stopRequested = false
+	let activeIndexer: IndexerHandle | null = null
 
-	await new Promise<void>((resolve, reject) => {
-		// A pending promise alone does not keep Node alive.
-		const keepAliveTimer = runtime.setInterval(
-			() => undefined,
-			keepAliveIntervalMs,
-		)
-		let stopping = false
-		const signalHandlers = new Map<NodeJS.Signals, () => void>()
-
-		const cleanup = () => {
-			runtime.clearInterval(keepAliveTimer)
-			for (const signal of signals) {
-				const handler = signalHandlers.get(signal)
-				if (handler !== undefined) {
-					runtime.process.off(signal, handler)
-				}
-			}
-		}
-
-		const handleStop = async () => {
-			if (stopping) {
-				return
-			}
-			stopping = true
-			cleanup()
-			try {
-				await indexer.stop()
-				resolve()
-			} catch (error) {
-				reject(error)
-			}
-		}
-
+	const stopSignalPromise = new Promise<void>(resolve => {
 		for (const signal of signals) {
 			const handler = () => {
-				void handleStop()
+				stopRequested = true
+				resolve()
 			}
 			signalHandlers.set(signal, handler)
 			runtime.process.on(signal, handler)
 		}
 	})
+
+	const cleanup = () => {
+		for (const signal of signals) {
+			const handler = signalHandlers.get(signal)
+			if (handler !== undefined) {
+				runtime.process.off(signal, handler)
+			}
+		}
+	}
+
+	const stopActiveIndexer = async () => {
+		if (activeIndexer !== null) {
+			try {
+				await activeIndexer.stop()
+			} finally {
+				activeIndexer = null
+			}
+		}
+	}
+
+	let firstFailureAt: number | null = null
+	let attempts = 0
+
+	try {
+		while (!stopRequested) {
+			activeIndexer = create(config)
+			try {
+				await activeIndexer.start()
+				await Promise.race([stopSignalPromise, activeIndexer.waitForExit()])
+				if (stopRequested) {
+					break
+				}
+				throw new Error("Indexer worker exited unexpectedly")
+			} catch (error) {
+				if (stopRequested) {
+					break
+				}
+
+				attempts += 1
+				firstFailureAt = firstFailureAt ?? Date.now()
+				const recoveryDurationMs = Date.now() - firstFailureAt
+				await stopActiveIndexer()
+
+				if (
+					!recovery.enabled ||
+					recoveryDurationMs >= recovery.maxRecoveryDurationMs
+				) {
+					if (onRecoveryFailure) {
+						await onRecoveryFailure({
+							attempts,
+							recoveryDurationMs,
+							error,
+							timestamp: new Date().toISOString(),
+						})
+					}
+					throw error
+				}
+
+				const delay = Math.min(
+					recovery.initialRetryDelayMs *
+						recovery.backoffFactor ** Math.max(attempts - 1, 0),
+					recovery.maxRetryDelayMs,
+				)
+				console.error(
+					`Indexer worker crashed, retrying in ${delay}ms (attempt ${attempts})`,
+					error,
+				)
+				await Effect.runPromise(Effect.sleep(Duration.millis(delay)))
+			}
+		}
+	} finally {
+		await stopActiveIndexer()
+		cleanup()
+	}
 }
 
 export const Indexer = {
