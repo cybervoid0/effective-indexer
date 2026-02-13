@@ -420,12 +420,19 @@ export const runIndexerWorker = async (
 					recoveryDurationMs >= recovery.maxRecoveryDurationMs
 				) {
 					if (onRecoveryFailure) {
-						await onRecoveryFailure({
-							attempts,
-							recoveryDurationMs,
-							error,
-							timestamp: new Date().toISOString(),
-						})
+						try {
+							await onRecoveryFailure({
+								attempts,
+								recoveryDurationMs,
+								error,
+								timestamp: new Date().toISOString(),
+							})
+						} catch (notificationError) {
+							console.error(
+								"Recovery failure notification failed:",
+								notificationError,
+							)
+						}
 					}
 					throw error
 				}
