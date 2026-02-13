@@ -345,8 +345,6 @@ npm run check
 
 ## License
 
-Free for noncommercial use under PolyForm Noncommercial 1.0.0.
-Commercial use requires a paid license — see `LICENSE`.
-Contact: Aleksandr Shenshin <shenshin@me.com>.
+MIT — do whatever you want.
 
 Repository: [github.com/cybervoid0/effective-indexer](https://github.com/cybervoid0/effective-indexer)

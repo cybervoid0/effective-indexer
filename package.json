@@ -1,6 +1,6 @@
 {
 	"name": "effective-indexer",
-	"version": "0.2.7",
+	"version": "0.2.8",
 	"author": {
 		"name": "Aleksandr Shenshin",
 		"email": "shenshin@me.com"
@@ -20,7 +20,7 @@
 	"bugs": {
 		"url": "https://github.com/cybervoid0/effective-indexer/issues"
 	},
-	"license": "SEE LICENSE IN LICENSE",
+	"license": "MIT",
 	"type": "module",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.js",
